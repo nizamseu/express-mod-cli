@@ -1,0 +1,13 @@
+{
+  "name": "express-app-generator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "bin": {
+    "create": "index.js",
+    "add": "index.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1"
+  }
+}
