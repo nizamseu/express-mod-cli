@@ -14,7 +14,12 @@
     "express",
     "generator",
     "mongodb",
-    "modular"
+    "modular",
+    "cli",
+    "command-line",
+    "command-line-tool",
+    "boilerplate",
+    "express-app"
   ],
   "author": "Nizam Uddin",
   "license": "MIT",
