@@ -20,7 +20,6 @@ express-mod-cli create my-project
 
 ```bash
 cd projectName
-npm run dev
 ```
 
 ### Adding New Modules 📦
@@ -33,20 +32,15 @@ express-mod-cli add users
 
 `npx express-mod-cli add users`
 
+### Run the Projects
+
+```js
+npm run dev
+```
+
 ### Database Configuration 🔧
 
-### Local MongoDB Setup
-
-Create .env File
-
-Create a .env file in the root directory
-Use the template below to configure your environment variables
-
-Configure MongoDB URI
-
-## Database Configuration 🔧
-
-### Local MongoDB Setup
+#### Local MongoDB Setup
 
 1.  **Update MongoDB URI**
     `env`
