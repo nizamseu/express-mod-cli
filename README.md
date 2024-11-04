@@ -16,38 +16,69 @@ npm install -g express-mod-cli
 express-mod-cli create my-project
 ```
 
-### Add a new module
+### Go to Project Directory
+
+```bash
+cd projectName
+npm run dev
+```
+
+### Adding New Modules 📦
 
 ```bash
 express-mod-cli add users
 ```
 
-```
-To get started:
-      cd projectName
-      npm run dev
+### Example:
 
-    1. Update MongoDB URI:
-       - Open the .env file located in the root of the project directory.
-       - Replace the placeholder MongoDB URI with your actual MongoDB URI.
-       - Example:
-         MONGODB_URI=mongodb://localhost:27017/yourDB_name
+`npx express-mod-cli add users`
 
-    2. Add your database name:
-       - You can specify the database name directly in the MongoDB URI as shown above,
-         or set it as a separate environment variable:
-         DB_NAME=yourDB_name
+### Database Configuration 🔧
 
-    3. Example .env file setup:
-       - MONGODB_URI=mongodb://localhost:27017/yourDB_name
-       - DB_NAME=yourDB_name
-       - PORT=5000
+### Local MongoDB Setup
 
-    4. Save the .env file and restart the server to apply changes.
+Create .env File
 
-    To add new modules:
-      npx express-mod-cli add <module-name>
-```
+Create a .env file in the root directory
+Use the template below to configure your environment variables
+
+Configure MongoDB URI
+
+## Database Configuration 🔧
+
+### Local MongoDB Setup
+
+1.  **Update MongoDB URI**
+    `env`
+
+- Open the .env file located in the root of the project directory.
+- Replace the placeholder MongoDB URI with your actual MongoDB URI.
+- Example: `MONGODB_URI=mongodb://localhost:27017/yourDB_name`
+
+### MongoDB Atlas Setup ☁️
+
+If you prefer using MongoDB Atlas (cloud database):
+
+1.  **Get Your Connection String**
+    - Log in to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
+    - Navigate to your cluster
+    - Click "Connect"
+    - Choose "Connect your application"
+    - Copy the connection string
+2.  **Configure Atlas URI**
+
+    env
+    ` For MongoDB Atlas MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/yourDB_name DB_NAME=yourDB_name PORT=5000`
+
+    > Remember to replace `<username>`, `<password>`, and the rest of the URI with your actual MongoDB Atlas credentials
+
+## Environment Variables Explained 📝
+
+| Variable      | Description                    | Example                                 |
+| ------------- | ------------------------------ | --------------------------------------- |
+| `MONGODB_URI` | Your MongoDB connection string | `mongodb://localhost:27017/yourDB_name` |
+| `DB_NAME`     | Name of your database          | `yourDB_name`                           |
+| `PORTI`       | Port number for the server     | `5000`                                  |
 
 ## Modules
 
@@ -65,6 +96,7 @@ For each module, the following CRUD endpoints are available:
 - GET /module/:id: Retrieve a single item by ID.
 - POST /module: Create a new item.
 - PATCH /module/:id: Update an existing item by ID.
+- DELETE /module/:id: Delete an item by ID
 
 ## Features
 
