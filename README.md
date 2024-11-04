@@ -1,13 +1,29 @@
-### Project Create: `npx express-mod-cli create my-project`
+# Express Modular Generator
 
-### cd my-project
+A command-line tool to generate Express.js applications with a modular architecture pattern.
 
-### Route create: `npx express-mod-cli add users`
+## Installation
 
+```bash
+npm install -g express-modular-generator
 ```
 
+## Usage
 
-    To get started:
+### Create a new project
+
+```bash
+create-express-app create my-project
+```
+
+### Add a new module
+
+```bash
+create-express-app add users
+```
+
+```
+To get started:
       cd projectName
       npm run dev
 
@@ -32,3 +48,37 @@
     To add new modules:
       npx express-mod-cli add <module-name>
 ```
+
+## Features
+
+- Modular architecture with Model-Route-Controller pattern
+- MongoDB integration
+- Error handling middleware
+- CORS and security headers
+- Environment configuration
+- Ready-to-use CRUD operations
+
+## Project Structure
+
+```
+project/
+├── src/
+│   ├── config/
+│   │   └── db.js
+│   ├── middleware/
+│   │   └── errorHandler.js
+│   ├── modules/
+│   │   └── [module-name]/
+│   │       ├── module.model.js
+│   │       ├── module.controller.js
+│   │       └── module.routes.js
+│   ├── utils/
+│   └── index.js
+├── .env
+├── .gitignore
+└── package.json
+```
+
+## License
+
+MIT
