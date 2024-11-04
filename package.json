@@ -25,5 +25,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/nizamseu/express-app-generator"
-  }
+  },
+  "readme": "README.md", // This is important to ensure the README is linked correctly
+  "homepage": "https://github.com/nizamseu/express-app-generator#readme",
+  "install": "npm install -g express-mod-cli" // This line is for clarity in the metadata
 }
