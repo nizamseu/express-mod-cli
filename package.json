@@ -1,6 +1,6 @@
 {
   "name": "express-mod-cli",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Express application generator with modular architecture. Install globally using 'npm install -g express-mod-cli'",
   "main": "bin/index.js",
   "bin": {
@@ -24,9 +24,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/nizamseu/express-app-generator"
+    "url": "https://github.com/nizamseu/express-mod-cli"
   },
   "readme": "README.md", // This is important to ensure the README is linked correctly
-  "homepage": "https://github.com/nizamseu/express-app-generator#readme",
+  "homepage": "https://github.com/nizamseu/express-mod-cli#readme",
   "install": "npm install -g express-mod-cli" // This line is for clarity in the metadata
 }
