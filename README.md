@@ -5,7 +5,7 @@ A command-line tool to generate Express.js applications with a modular architect
 ## Installation
 
 ```bash
-npm install -g express-modular-generator
+npm install -g express-mod-cli
 ```
 
 ## Usage
@@ -13,13 +13,13 @@ npm install -g express-modular-generator
 ### Create a new project
 
 ```bash
-create-express-app create my-project
+express-mod-cli create my-project
 ```
 
 ### Add a new module
 
 ```bash
-create-express-app add users
+express-mod-cli add users
 ```
 
 ```
@@ -57,6 +57,11 @@ To get started:
 - CORS and security headers
 - Environment configuration
 - Ready-to-use CRUD operations
+
+## Upcoming Features
+
+- Authentication: Adding user authentication with JWT for securing endpoints.
+- Route Authentication: Implementing route-level authentication middleware to restrict access to specific routes.
 
 ## Project Structure
 
