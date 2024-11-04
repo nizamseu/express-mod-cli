@@ -1,6 +1,6 @@
 {
   "name": "express-mod-cli",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Express application generator with modular architecture. Install globally using 'npm install -g express-mod-cli'",
   "preferGlobal": true,
   "main": "bin/index.js",
