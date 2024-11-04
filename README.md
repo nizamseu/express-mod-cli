@@ -5,7 +5,7 @@
 ### Route create: `npx express-mod-cli add users`
 
 ```
-Express project "${projectName}" created successfully!
+
 
     To get started:
       cd projectName
