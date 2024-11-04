@@ -49,6 +49,23 @@ To get started:
       npx express-mod-cli add <module-name>
 ```
 
+## Modules
+
+Each module follows the Model-Controller-Route pattern and includes:
+
+- Model: Defines the database operations.
+- Controller: Manages the business logic for each route.
+- Routes: Maps HTTP methods to controller functions.
+
+## Default Endpoints (CRUD)
+
+For each module, the following CRUD endpoints are available:
+
+- GET /module: Retrieve all items.
+- GET /module/:id: Retrieve a single item by ID.
+- POST /module: Create a new item.
+- PATCH /module/:id: Update an existing item by ID.
+
 ## Features
 
 - Modular architecture with Model-Route-Controller pattern
