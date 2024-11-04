@@ -1,6 +1,6 @@
 {
   "name": "express-mod-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Express application generator with modular architecture",
   "main": "bin/index.js",
   "bin": {
