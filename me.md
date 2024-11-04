@@ -1,8 +1,8 @@
-### Project Create: `npx express-app-generator create my-project`
+### Project Create: `npx express-mod-cli create my-project`
 
 cd my-project
 
-### Route create: `npx express-app-generator add users`
+### Route create: `npx express-mod-cli add users`
 
 npx . create my-project
 
@@ -15,7 +15,7 @@ cd my-project
 
 npx . add users
 
-express-app-generator/
+express-mod-cli/
 ├── package.json
 └── bin/
 └── index.js
