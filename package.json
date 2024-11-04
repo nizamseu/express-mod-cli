@@ -29,5 +29,4 @@
   },
   "readme": "README.md", // This is important to ensure the README is linked correctly
   "homepage": "https://github.com/nizamseu/express-mod-cli#readme",
-
 }
