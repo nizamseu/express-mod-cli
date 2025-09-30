@@ -1,7 +1,7 @@
 {
   "name": "express-mod-cli",
-  "version": "1.0.11",
-  "description": "Express application generator with modular architecture. Install globally using 'npm install -g express-mod-cli'",
+  "version": "1.1.0",
+  "description": "Modern Express.js application generator with clean MVC architecture and Mongoose ODM integration. Install globally using 'npm install -g express-mod-cli'",
   "preferGlobal": true,
   "main": "bin/index.js",
   "bin": {
@@ -14,19 +14,24 @@
     "express",
     "generator",
     "mongodb",
+    "mongoose",
+    "mvc",
     "modular",
     "cli",
     "command-line",
-    "command-line-tool",
     "boilerplate",
-    "express-app"
+    "express-app",
+    "api-generator",
+    "rest-api",
+    "nodejs"
   ],
   "author": "Nizam Uddin",
   "license": "MIT",
   "dependencies": {
     "child_process": "^1.0.2",
     "fs": "0.0.1-security",
-    "path": "^0.12.7"
+    "path": "^0.12.7",
+    "chalk": "^4.1.2"
   },
   "repository": {
     "type": "git",
