@@ -14,6 +14,9 @@
   "engines": {
     "node": ">=18.3.0"
   },
+  "dependencies": {
+    "pluralize": "^8.0.0"
+  },
   "scripts": {
     "test": "node --test"
   },
