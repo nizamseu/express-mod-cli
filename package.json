@@ -1,7 +1,7 @@
 {
   "name": "express-mod-cli",
-  "version": "1.1.0",
-  "description": "Modern Express.js application generator with clean MVC architecture and Mongoose ODM integration. Install globally using 'npm install -g express-mod-cli'",
+  "version": "1.2.0",
+  "description": "Modern Express.js application generator with clean MVC architecture, JavaScript or TypeScript, and multi-database support (MongoDB, PostgreSQL, MySQL). Install globally using 'npm install -g express-mod-cli'",
   "preferGlobal": true,
   "main": "bin/index.js",
   "bin": {
@@ -22,6 +22,11 @@
     "generator",
     "mongodb",
     "mongoose",
+    "postgresql",
+    "mysql",
+    "sequelize",
+    "typescript",
+    "multi-database",
     "mvc",
     "modular",
     "cli",
