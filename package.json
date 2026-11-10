@@ -41,6 +41,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nizamseu/express-mod-cli"
+    "url": "git+https://github.com/nizamseu/express-mod-cli.git"
   }
 }
