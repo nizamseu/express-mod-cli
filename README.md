@@ -8,9 +8,12 @@ A modern command-line tool to generate Express.js applications with clean MVC ar
 - 🟦 **JavaScript or TypeScript** - Pick the language when you create the project
 - 🗄️ **MongoDB, PostgreSQL, MySQL** - Mongoose for MongoDB, Sequelize for SQL
 - 🔀 **Multiple Databases** - Connect several databases in one project, even of different kinds
+- 🧩 **Your own fields** - `add products name:string price:number` generates the schema, validation and migration
+- ✅ **Request validation** - Zod schemas for every module; unknown fields never reach the database
+- 📄 **Pagination, sorting, search** - `?page=2&limit=20&sort=-price&search=phone` on every list endpoint
+- 🔁 **SQL migrations** - Tables are created and changed by migrations, not `sync()`
+- 🧪 **Test-ready** - `npm test` works from the first minute, no database needed
 - 🔒 **Security Ready** - CORS, Helmet, and error handling built-in
-- ⚡ **Zero Configuration** - Ready to run with minimal setup
-- 📦 **Modular Design** - Easy to add and manage modules
 
 ## 📋 Installation
 
@@ -18,17 +21,17 @@ A modern command-line tool to generate Express.js applications with clean MVC ar
 npm install -g express-mod-cli
 ```
 
-Requires Node.js 18.3 or newer.
+Requires Node.js 18.3 or newer (generated TypeScript projects run their tests with Node.js 21 or newer).
 
 ## 🚀 Quick Start
 
 ### Create a new project
 
 ```bash
-# JavaScript + MongoDB (the defaults)
-express-mod-cli create my-project
+# Asks for the name, language and database
+express-mod-cli create
 
-# TypeScript + PostgreSQL
+# Or give everything up front
 express-mod-cli create my-project --ts --db postgres
 
 cd my-project
@@ -38,52 +41,177 @@ npm run dev
 ### Add modules to your project
 
 ```bash
-express-mod-cli add users
-express-mod-cli add products
-express-mod-cli add order-items
+express-mod-cli add users                                   # default fields
+express-mod-cli add products name:string price:number stock:integer:default=0
+express-mod-cli add order-items quantity:integer status:enum:pending,shipped:default=pending
 ```
 
 ### Connect another database
 
 ```bash
 express-mod-cli add-db analytics --type postgres
-express-mod-cli add reports --db analytics
+express-mod-cli add reports title:string --db analytics
 ```
 
 ## 📖 Commands
 
-| Command                 | Description                                | Example                                         |
-| ----------------------- | ------------------------------------------ | ----------------------------------------------- |
-| `create <project-name>` | Create a new Express project               | `express-mod-cli create my-app --ts`            |
-| `add <module-name>`     | Add a new module to the current project    | `express-mod-cli add users`                     |
-| `add-db <name>`         | Add a database connection to the project   | `express-mod-cli add-db analytics --type mysql` |
-| `--help` or `-h`        | Show help information                      | `express-mod-cli --help`                        |
-| `--version` or `-v`     | Show version number                        | `express-mod-cli --version`                     |
+| Command                         | Description                                | Example                                         |
+| ------------------------------- | ------------------------------------------ | ----------------------------------------------- |
+| `create [project-name]`         | Create a new Express project               | `express-mod-cli create my-app --ts`            |
+| `add <module-name> [fields...]` | Add a module to the current project        | `express-mod-cli add users name:string`         |
+| `add-db <name>`                 | Add a database connection to the project   | `express-mod-cli add-db analytics --type mysql` |
+| `add-migration <name>`          | Add an empty migration to a SQL connection | `express-mod-cli add-migration add-phone`       |
+| `--help` or `-h`                | Show help information                      | `express-mod-cli --help`                        |
+| `--version` or `-v`             | Show version number                        | `express-mod-cli --version`                     |
 
 ### Options
 
-| Command  | Option                 | Description                                                                |
-| -------- | ---------------------- | -------------------------------------------------------------------------- |
-| `create` | `--db <type>`          | `mongodb` (default), `postgres` or `mysql`                                 |
-| `create` | `--ts`, `--typescript` | Generate a TypeScript project                                              |
-| `create` | `--js`, `--javascript` | Generate a JavaScript project (default)                                    |
-| `create` | `--skip-install`       | Don't run `npm install`                                                    |
-| `add`    | `--db <connection>`    | The database connection the module uses (default: `default`)               |
-| `add-db` | `--type <type>`        | `mongodb`, `postgres` or `mysql` (default: same as the default connection) |
-| `add-db` | `--skip-install`       | Don't run `npm install` for newly needed packages                          |
+| Command         | Option                 | Description                                                                |
+| --------------- | ---------------------- | -------------------------------------------------------------------------- |
+| `create`        | `--db <type>`          | `mongodb`, `postgres` or `mysql`                                           |
+| `create`        | `--ts`, `--typescript` | Generate a TypeScript project                                              |
+| `create`        | `--js`, `--javascript` | Generate a JavaScript project                                              |
+| `create`        | `-y`, `--yes`          | Don't ask; use JavaScript + MongoDB for anything not given                 |
+| `create`        | `--skip-install`       | Don't run `npm install`                                                    |
+| `add`           | `--db <connection>`    | The database connection the module uses (default: `default`)               |
+| `add`           | `--skip-install`       | Don't run `npm install` when the project needs a new package               |
+| `add-db`        | `--type <type>`        | `mongodb`, `postgres` or `mysql` (default: same as the default connection) |
+| `add-db`        | `--skip-install`       | Don't run `npm install` for newly needed packages                          |
+| `add-migration` | `--db <connection>`    | The SQL connection the migration belongs to (default: `default`)           |
 
-Module names may contain letters, numbers, `-` and `_` (`users`, `user-profile`, `order_items`).
-`add` and `add-db` detect the project's language from `.expressmodrc.json`, so there is no language flag for them.
+When `create` runs in a terminal, it asks for whatever was not given on the command line (Enter picks the default).
+In scripts and CI it never asks: pass `--ts`/`--js` and `--db`, or `-y` for the defaults.
+
+`add`, `add-db` and `add-migration` detect the project's language from `.expressmodrc.json`, so there is no language flag for them.
+
+## 🧩 Fields
+
+Describe a module's fields after its name:
+
+```bash
+express-mod-cli add products name:string:unique price:number stock:integer:default=0 \
+  status:enum:draft,published:default=draft releasedAt:date:optional
+```
+
+Format: `<name>:<type>[:optional][:unique][:default=<value>]`
+
+| Type       | MongoDB | SQL            | Request body                   |
+| ---------- | ------- | -------------- | ------------------------------ |
+| `string`   | String  | `VARCHAR(255)` | non-empty text                 |
+| `text`     | String  | `TEXT`         | non-empty text                 |
+| `number`   | Number  | `DOUBLE`       | number                         |
+| `integer`  | Number  | `INTEGER`      | whole number                   |
+| `boolean`  | Boolean | `BOOLEAN`      | `true` / `false`               |
+| `date`     | Date    | `DATETIME`     | date string, e.g. `2026-01-31` |
+| `enum:a,b` | String  | `VARCHAR(255)` | one of the listed values       |
+
+| Option        | Meaning                                              |
+| ------------- | ---------------------------------------------------- |
+| _(none)_      | Required when creating a record                      |
+| `optional`    | May be left out or `null`                            |
+| `unique`      | Unique index (duplicates return `409`)               |
+| `default=<v>` | Value used when left out (not for `text` and `date`) |
+
+Short type names work too: `int`, `float`, `bool`, `str`.
+Without fields, a module gets `name:string description:text:optional status:enum:active,inactive:default=active`.
+`id`, `createdAt` and `updatedAt` are added automatically.
+
+## ✅ Validation
+
+Each module has a `<module>.validation.js` with [Zod](https://zod.dev) schemas built from its fields. The routes run them before the controller:
+
+```javascript
+router.post("/", validate(createProductSchema), productsController.create);
+router.patch("/:id", validate(updateProductSchema), productsController.update);
+```
+
+- Fields that the schema does not list are removed, so a client can't set e.g. `role` or `id`.
+- `PATCH` accepts any subset of the fields, but at least one.
+- Invalid requests get a `400` naming every problem:
+
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "errors": [
+    { "field": "price", "message": "Invalid input: expected number, received string" },
+    { "field": "status", "message": "Invalid option: expected one of \"draft\"|\"published\"" }
+  ]
+}
+```
+
+## 📄 Pagination, Sorting and Search
+
+Every `GET /<module>` accepts:
+
+| Query    | Example               | Default      |
+| -------- | --------------------- | ------------ |
+| `page`   | `?page=2`             | `1`          |
+| `limit`  | `?limit=50` (max 100) | `20`         |
+| `sort`   | `?sort=-price,name`   | `-createdAt` |
+| `search` | `?search=phone`       | -            |
+
+`-` sorts descending; several fields are separated by commas. Only the module's own fields (plus `createdAt`, `updatedAt` and, for SQL, `id`) can be sorted on.
+`search` looks for the text, case-insensitively, in the module's `string` and `text` fields.
+
+```json
+{
+  "success": true,
+  "data": [],
+  "pagination": { "page": 2, "limit": 20, "total": 41, "totalPages": 3 },
+  "message": "Products retrieved successfully"
+}
+```
+
+## 🔁 SQL Migrations
+
+PostgreSQL and MySQL tables are managed by migrations ([Umzug](https://github.com/sequelize/umzug)), one folder per connection:
+
+```
+src/migrations/
+├── default/
+│   ├── 20260131094500-create-products.js     # written by "add products ..."
+│   └── 20260202120000-add-phone-to-users.js  # written by "add-migration add-phone-to-users"
+└── analytics/
+    └── ...
+```
+
+- `add` writes the migration that creates the module's table.
+- `add-migration <name> [--db <connection>]` writes an empty one for your own changes (new column, index, ...).
+- Pending migrations run when the server starts. Set `DB_AUTO_MIGRATE=false` to run them yourself, e.g. as a deploy step.
+
+```bash
+npm run migrate                      # apply pending migrations
+npm run migrate:down -- analytics    # undo the last migration of a connection
+npm run migrate:status               # applied and pending migrations
+```
+
+When you change a table with a migration, update the module's model and validation to match.
+Applied migrations are recorded in the `SequelizeMeta` table. The database itself must already exist.
+
+## 🧪 Tests
+
+Generated projects come with [supertest](https://github.com/ladjs/supertest) and Node's built-in test runner:
+
+```bash
+npm test
+```
+
+`tests/app.test.js` checks the 404 and malformed-JSON handling, and every `add` writes `tests/<module>.test.js` with validation tests.
+They import `src/app`, which builds the Express app without connecting to a database or opening a port, so they run anywhere, including CI.
 
 ## 🟦 JavaScript and TypeScript
 
-|                | JavaScript (default)  | TypeScript (`--ts`)                    |
-| -------------- | --------------------- | -------------------------------------- |
-| Source files   | `src/**/*.js`         | `src/**/*.ts`                          |
-| `npm run dev`  | `nodemon src/index.js` | `tsx watch src/index.ts`              |
-| `npm run build` | -                    | `tsc` (output in `dist/`)              |
-| `npm start`    | `node src/index.js`   | `node dist/index.js` (run build first) |
-| Extra          | -                     | `npm run typecheck`, `tsconfig.json`   |
+|                 | JavaScript (default)   | TypeScript (`--ts`)                    |
+| --------------- | ---------------------- | -------------------------------------- |
+| Source files    | `src/**/*.js`          | `src/**/*.ts`                          |
+| `npm run dev`   | `nodemon src/index.js` | `tsx watch src/index.ts`               |
+| `npm run build` | -                      | `tsc` (output in `dist/`)              |
+| `npm start`     | `node src/index.js`    | `node dist/index.js` (run build first) |
+| `npm test`      | `node --test`          | `tsx --test`                           |
+| Extra           | -                      | `npm run typecheck`, `tsconfig.json`   |
+
+In a built TypeScript project, migrations run without tsx: `node dist/scripts/migrate.js up`.
 
 ## 🗄️ Database Configuration
 
@@ -109,9 +237,6 @@ DATABASE_URL=mysql://user:password@localhost:3306/my_project_db
 
 A `.env.example` with the same variables is generated next to `.env` (which is git-ignored).
 
-For SQL databases, the tables of your models are created on startup if they don't exist yet (`sequelize.sync()`).
-Existing tables are never altered - use migrations for schema changes. The database itself must already exist.
-
 ## 🔀 Multiple Databases
 
 Add as many connections as you need, of any supported kind:
@@ -126,7 +251,8 @@ express-mod-cli add-db logs --type mongodb
 1. Adds it to `src/config/databases.js`
 2. Creates the connection helper (`src/config/mongodb.js` or `src/config/sql.js`) if the project doesn't have it yet
 3. Adds the variables to `.env` and `.env.example` (`DB_<NAME>_URI`, plus `DB_<NAME>_NAME` for MongoDB)
-4. Installs the packages the database needs
+4. For the first SQL database: adds the migration runner and the `migrate` scripts
+5. Installs the packages the database needs
 
 ```javascript
 // src/config/databases.js
@@ -147,8 +273,8 @@ const databases = {
 Then tell a module which connection to use:
 
 ```bash
-express-mod-cli add reports --db analytics   # Sequelize model on "analytics"
-express-mod-cli add users                    # Mongoose model on "default"
+express-mod-cli add reports title:string --db analytics   # Sequelize model + migration on "analytics"
+express-mod-cli add users                                 # Mongoose model on "default"
 ```
 
 Each model is bound to its connection, so you can also move one by hand:
@@ -156,7 +282,7 @@ Each model is bound to its connection, so you can also move one by hand:
 ```javascript
 // MongoDB
 const { getMongoConnection } = require("../../config/mongodb");
-const UsersModel = getMongoConnection("default").model("Users", usersSchema);
+const UserModel = getMongoConnection("default").model("User", userSchema);
 
 // PostgreSQL / MySQL
 const { getSqlConnection } = require("../../config/sql");
@@ -175,69 +301,102 @@ my-project/
 │   │   ├── db.js                 # Connects / disconnects all of them
 │   │   └── mongodb.js / sql.js   # Connection helpers (one per kind of database in use)
 │   ├── middleware/
-│   │   └── errorHandler.js       # Global error handling
+│   │   ├── errorHandler.js       # Global error handling
+│   │   └── validate.js           # Runs a module's Zod schema on the request body
+│   ├── migrations/<connection>/  # SQL migrations
 │   ├── modules/                  # Your business modules
-│   │   └── users/
-│   │       ├── users.model.js      # Schema & model
-│   │       ├── users.controller.js # Business logic
-│   │       └── users.routes.js     # Express routes
-│   ├── utils/                    # Utility functions
-│   └── index.js                  # Main server file
+│   │   └── products/
+│   │       ├── products.model.js      # Schema & model
+│   │       ├── products.validation.js # Zod schemas for create / update
+│   │       ├── products.controller.js # Business logic
+│   │       └── products.routes.js     # Express routes
+│   ├── scripts/migrate.js        # npm run migrate (SQL projects)
+│   ├── utils/listQuery.js        # Pagination, sorting and search helpers
+│   ├── app.js                    # Express app: middleware and routes
+│   └── index.js                  # Connects the databases and starts the server
+├── tests/                        # npm test
 ├── .env                          # Environment variables (git-ignored)
 ├── .env.example                  # Documents the environment variables
-├── .expressmodrc.json            # Project setup, read by "add" and "add-db"
+├── .expressmodrc.json            # Project setup, read by "add", "add-db" and "add-migration"
 ├── .gitignore
 └── package.json
 ```
 
 TypeScript projects have the same layout with `.ts` files, plus `tsconfig.json` and `src/config/env.ts`.
 
-> **Keep the marker comments.** `add` and `add-db` insert code below `// ROUTE_IMPORTS`, `// ROUTE_MIDDLEWARE`,
+> **Keep the marker comments.** The CLI inserts code below `// ROUTE_IMPORTS`, `// ROUTE_MIDDLEWARE` (in `src/app`),
 > `// DB_CONNECTIONS`, `// DB_DRIVER_IMPORTS` and `// DB_DRIVERS`. If one is missing, the command stops and tells you which.
 
 ## 📦 Module Architecture
 
-Each module generates exactly **3 files** following MVC pattern. This is `express-mod-cli add users` in a JavaScript + MongoDB project:
+`express-mod-cli add products name:string price:number` in a JavaScript + MongoDB project generates:
 
-### 🔹 Model (`users.model.js`)
+### 🔹 Model (`products.model.js`)
 
 ```javascript
 const mongoose = require("mongoose");
 const { getMongoConnection } = require("../../config/mongodb");
 
-const usersSchema = new mongoose.Schema(
+const productSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    description: { type: String, trim: true },
-    status: {
-      type: String,
-      enum: ["active", "inactive"],
-      default: "active",
-    },
+    price: { type: Number, required: true },
   },
   { timestamps: true }
 );
 
-const UsersModel = getMongoConnection("default").model("Users", usersSchema);
+const ProductModel = getMongoConnection("default").model("Product", productSchema);
 
-module.exports = UsersModel;
+module.exports = ProductModel;
 ```
 
-On a PostgreSQL / MySQL connection the model is a Sequelize model with the same fields.
+Model names are singular (`Product`), collections and tables plural (`products`). On a PostgreSQL / MySQL connection the model is a Sequelize model with the same fields, plus a migration.
 
-### 🔹 Controller (`users.controller.js`)
+### 🔹 Validation (`products.validation.js`)
 
 ```javascript
-const UsersModel = require("./users.model");
+const { z } = require("zod");
+
+const createProductSchema = z.object({
+  name: z.string().trim().min(1),
+  price: z.number(),
+});
+
+const updateProductSchema = createProductSchema
+  .partial()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Provide at least one field to update",
+  });
+
+module.exports = { createProductSchema, updateProductSchema };
+```
+
+### 🔹 Controller (`products.controller.js`)
+
+```javascript
+const ProductModel = require("./products.model");
+const { escapeRegex, paginate, parseListQuery } = require("../../utils/listQuery");
+
+const SORTABLE_FIELDS = ["name", "price", "createdAt", "updatedAt"];
+const SEARCHABLE_FIELDS = ["name"];
 
 async function getAll(req, res, next) {
   try {
-    const items = await UsersModel.find().sort({ createdAt: -1 });
+    const { page, limit, offset, sort, search } = parseListQuery(req.query, { sortable: SORTABLE_FIELDS });
+    const filter = search
+      ? { $or: SEARCHABLE_FIELDS.map((field) => ({ [field]: { $regex: escapeRegex(search), $options: "i" } })) }
+      : {};
+
+    const [items, total] = await Promise.all([
+      ProductModel.find(filter).sort(sort).skip(offset).limit(limit),
+      ProductModel.countDocuments(filter),
+    ]);
 
     res.json({
       success: true,
       data: items,
-      message: "Users retrieved successfully",
+      pagination: paginate(total, page, limit),
+      message: "Products retrieved successfully",
     });
   } catch (error) {
     next(error);
@@ -246,18 +405,21 @@ async function getAll(req, res, next) {
 // ... getById, create, update, remove
 ```
 
-### 🔹 Routes (`users.routes.js`)
+### 🔹 Routes (`products.routes.js`)
 
 ```javascript
 const express = require("express");
-const router = express.Router();
-const usersController = require("./users.controller");
+const validate = require("../../middleware/validate");
+const productsController = require("./products.controller");
+const { createProductSchema, updateProductSchema } = require("./products.validation");
 
-router.get("/", usersController.getAll);
-router.get("/:id", usersController.getById);
-router.post("/", usersController.create);
-router.patch("/:id", usersController.update);
-router.delete("/:id", usersController.remove);
+const router = express.Router();
+
+router.get("/", productsController.getAll);
+router.get("/:id", productsController.getById);
+router.post("/", validate(createProductSchema), productsController.create);
+router.patch("/:id", validate(updateProductSchema), productsController.update);
+router.delete("/:id", productsController.remove);
 
 module.exports = router;
 ```
@@ -266,41 +428,41 @@ module.exports = router;
 
 Each generated module provides RESTful API endpoints:
 
-| Method   | Endpoint        | Description     | Response                                         |
-| -------- | --------------- | --------------- | ------------------------------------------------ |
-| `GET`    | `/{module}`     | Get all items   | `{ success: true, data: [...], message: "..." }` |
-| `GET`    | `/{module}/:id` | Get one item    | `{ success: true, data: {...}, message: "..." }` |
-| `POST`   | `/{module}`     | Create new item | `{ success: true, data: {...}, message: "..." }` |
-| `PATCH`  | `/{module}/:id` | Update item     | `{ success: true, data: {...}, message: "..." }` |
-| `DELETE` | `/{module}/:id` | Delete item     | `{ success: true, data: {...}, message: "..." }` |
+| Method   | Endpoint        | Description                            | Response                                                            |
+| -------- | --------------- | -------------------------------------- | ------------------------------------------------------------------- |
+| `GET`    | `/{module}`     | List (paginated, sortable, searchable) | `{ success: true, data: [...], pagination: {...}, message: "..." }` |
+| `GET`    | `/{module}/:id` | Get one item                           | `{ success: true, data: {...}, message: "..." }`                    |
+| `POST`   | `/{module}`     | Create new item (validated)            | `{ success: true, data: {...}, message: "..." }`                    |
+| `PATCH`  | `/{module}/:id` | Update item (validated)                | `{ success: true, data: {...}, message: "..." }`                    |
+| `DELETE` | `/{module}/:id` | Delete item                            | `{ success: true, data: {...}, message: "..." }`                    |
 
-Errors always have the shape `{ success: false, message: "..." }`:
+Errors always have the shape `{ success: false, message: "..." }` (validation errors add an `errors` list):
 
-| Status | When                                              |
-| ------ | ------------------------------------------------- |
-| `400`  | Validation failed, malformed id or malformed JSON |
-| `404`  | Record or route not found                         |
-| `409`  | A unique value already exists                     |
-| `500`  | Unexpected error (details hidden in production)   |
+| Status | When                                                              |
+| ------ | ----------------------------------------------------------------- |
+| `400`  | Invalid body, malformed id or JSON, bad `page` / `limit` / `sort` |
+| `404`  | Record or route not found                                         |
+| `409`  | A unique value already exists                                     |
+| `500`  | Unexpected error (details hidden in production)                   |
 
 ### 🔍 Example API Usage
 
 ```bash
-# Get all users
-curl http://localhost:5000/users
+# List, newest first
+curl "http://localhost:5000/products?page=1&limit=20"
 
-# Get specific user
-curl http://localhost:5000/users/60d5ec49f1b2c8b1f8e4e1a1
+# Search and sort
+curl "http://localhost:5000/products?search=phone&sort=-price"
 
-# Create new user
-curl -X POST http://localhost:5000/users \
+# Create
+curl -X POST http://localhost:5000/products \
   -H "Content-Type: application/json" \
-  -d '{"name": "John Doe", "description": "Software Developer"}'
+  -d '{"name": "Phone", "price": 499}'
 
-# Update user
-curl -X PATCH http://localhost:5000/users/60d5ec49f1b2c8b1f8e4e1a1 \
+# Update
+curl -X PATCH http://localhost:5000/products/60d5ec49f1b2c8b1f8e4e1a1 \
   -H "Content-Type: application/json" \
-  -d '{"status": "inactive"}'
+  -d '{"price": 449}'
 ```
 
 ## 🛠️ Technology Stack
@@ -310,6 +472,7 @@ Generated projects pin a major version of each dependency (never `latest`), so a
 ### Core Dependencies
 
 - **Express.js 5.x** - Fast, unopinionated web framework
+- **Zod 4.x** - Request validation
 - **dotenv 18.x** - Environment variable management
 - **CORS 2.x** - Cross-origin resource sharing
 - **Helmet 8.x** - Security middleware
@@ -318,84 +481,68 @@ Generated projects pin a major version of each dependency (never `latest`), so a
 
 - **Mongoose 9.x** - MongoDB object modeling
 - **Sequelize 6.x** - SQL ORM, with **pg 8.x** (PostgreSQL) or **mysql2 3.x** (MySQL)
+- **Umzug 3.x** - SQL migrations
 
 ### Development Dependencies
 
+- **supertest 7.x** - HTTP tests
 - JavaScript: **Nodemon 3.x**
-- TypeScript: **TypeScript 7.x**, **tsx 4.x**, and type definitions for Node, Express and CORS
+- TypeScript: **TypeScript 7.x**, **tsx 4.x**, and type definitions for Node, Express, CORS and supertest
 
 ## 🏃‍♂️ Development Workflow
 
 1. **Create Project:**
 
    ```bash
-   express-mod-cli create my-ecommerce-app --ts
-   cd my-ecommerce-app
+   express-mod-cli create my-shop --ts --db postgres
+   cd my-shop
    ```
 
 2. **Configure Database:**
 
    ```bash
    # Edit .env file
-   MONGODB_URI=mongodb://localhost:27017
-   DB_NAME=ecommerce_db
+   DATABASE_URL=postgres://user:password@localhost:5432/my_shop_db
    ```
 
 3. **Add Business Modules:**
 
    ```bash
-   express-mod-cli add products
-   express-mod-cli add categories
-   express-mod-cli add orders
-   express-mod-cli add customers
+   express-mod-cli add products name:string price:number stock:integer:default=0
+   express-mod-cli add categories name:string:unique
+   express-mod-cli add orders total:number status:enum:pending,paid,shipped:default=pending
    ```
 
 4. **Start Development:**
+
    ```bash
-   npm run dev
+   npm run dev     # runs pending migrations, then starts the server
+   npm test
    ```
 
 ## 🎯 Best Practices
 
-### Model Customization
+### Changing a model
 
-After generating a module, customize the schema:
-
-```javascript
-// Example: Enhanced User model
-const usersSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true, minlength: 6 },
-    role: { type: String, enum: ["user", "admin"], default: "user" },
-    profile: {
-      avatar: String,
-      bio: String,
-      phone: String,
-    },
-  },
-  { timestamps: true }
-);
-```
+1. For SQL connections, write a migration: `express-mod-cli add-migration add-phone-to-users`
+2. Add the field to the model
+3. Add it to the Zod schema in `<module>.validation.js`, or clients can't set it
+4. If it should be sortable or searchable, add it to `SORTABLE_FIELDS` / `SEARCHABLE_FIELDS` in the controller
 
 ### Controller Enhancement
 
 Add business logic to controllers:
 
 ```javascript
-// Add custom methods
-async function getUserByEmail(req, res, next) {
+async function getByEmail(req, res, next) {
   try {
-    const user = await UsersModel.findOne({ email: req.params.email });
+    const user = await UserModel.findOne({ email: req.params.email });
     // ... handle response
   } catch (error) {
     next(error);
   }
 }
 ```
-
-The generated `create` and `update` handlers pass `req.body` straight to the model - validate or whitelist the fields before using them for anything sensitive.
 
 ## 🧪 Developing this CLI
 
@@ -413,7 +560,21 @@ npm test   # generates projects in a temp directory and checks the output
 
 ## 📝 Changelog
 
-### v1.2.0 (Latest)
+### v1.3.0 (Latest)
+
+- 🧩 **Custom fields** - `add <module> name:string price:number ...` with types, `optional`, `unique` and defaults
+- ✅ **Validation** - Zod schemas per module; unknown fields are dropped, errors list every invalid field
+- 📄 **Pagination, sorting, search** - on every list endpoint
+- 🔁 **SQL migrations** - Umzug replaces `sync()`; new `add-migration` command and `migrate` scripts
+- 🧪 **Tests in generated projects** - `npm test` with supertest, no database needed; one test file per module
+- 💬 **Interactive `create`** - asks for name, language and database when they are not given (`-y` to skip)
+- 🔤 **Natural names** - singular models (`Product`), plural tables, messages such as "Category created"
+- 🏗️ The Express app moved to `src/app`, so it can be tested without starting the server
+
+Projects created with v1.2.0 keep working: `add` adds the validation and list helpers they lack (and `zod` to package.json).
+Their SQL tables are still created by `sync()`; migrations, `add-migration` and generated tests need a project created with v1.3.0.
+
+### v1.2.0
 
 - 🟦 **TypeScript** - `create --ts` generates a fully typed project
 - 🗄️ **PostgreSQL & MySQL** - `create --db postgres|mysql` (Sequelize)
@@ -426,9 +587,6 @@ npm test   # generates projects in a temp directory and checks the output
   - A failed `npm install` no longer leaves a half-created project
   - Duplicate unique values return 409 instead of 500, and all error responses share one shape
 - 🔧 Generated servers shut down gracefully and pin dependency versions instead of `latest`
-- 🧹 The CLI itself now has zero dependencies
-
-Projects created with v1.1.0 keep working with `add`. `add-db` needs a project created with v1.2.0 or newer.
 
 ### v1.1.0
 
