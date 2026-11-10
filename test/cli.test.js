@@ -149,12 +149,12 @@ describe("add", () => {
     const project = createProject("add-basic");
     assert.equal(cli(project, "add", "users").code, 0);
 
-    const index = read(project, "src", "index.js");
+    const index = read(project, "src", "app.js");
     assert.match(index, /const usersRoutes = require\('\.\/modules\/users\/users\.routes'\);/);
     assert.match(index, /app\.use\('\/users', usersRoutes\);/);
     assert.match(
       read(project, "src", "modules", "users", "users.model.js"),
-      /getMongoConnection\('default'\)\.model\('Users'/
+      /getMongoConnection\('default'\)\.model\('User', userSchema\)/
     );
     assertValidJs(project);
   });
@@ -163,7 +163,7 @@ describe("add", () => {
     const project = createProject("add-hyphen");
     assert.equal(cli(project, "add", "user-profile").code, 0);
 
-    const index = read(project, "src", "index.js");
+    const index = read(project, "src", "app.js");
     assert.match(index, /const userProfileRoutes = require\('\.\/modules\/user-profile\/user-profile\.routes'\);/);
     assert.match(index, /app\.use\('\/user-profile', userProfileRoutes\);/);
     assertValidJs(project);
@@ -175,13 +175,13 @@ describe("add", () => {
 
     const modelPath = path.join(project, "src", "modules", "users", "users.model.js");
     fs.appendFileSync(modelPath, "// my change\n");
-    const indexBefore = read(project, "src", "index.js");
+    const indexBefore = read(project, "src", "app.js");
 
     const result = cli(project, "add", "users");
     assert.equal(result.code, 1);
     assert.match(result.err, /already exists/);
     assert.match(fs.readFileSync(modelPath, "utf-8"), /\/\/ my change/);
-    assert.equal(read(project, "src", "index.js"), indexBefore);
+    assert.equal(read(project, "src", "app.js"), indexBefore);
   });
 
   test("rejects names that would collide or escape the project", () => {
@@ -202,7 +202,7 @@ describe("add", () => {
 
   test("fails without writing files when a route marker was removed", () => {
     const project = createProject("add-marker");
-    const indexPath = path.join(project, "src", "index.js");
+    const indexPath = path.join(project, "src", "app.js");
     fs.writeFileSync(indexPath, read(indexPath).replace("// ROUTE_MIDDLEWARE", ""));
 
     const result = cli(project, "add", "users");
@@ -226,7 +226,7 @@ describe("add", () => {
     const project = createProject("add-ts", "--ts");
     assert.equal(cli(project, "add", "users").code, 0);
 
-    assert.match(read(project, "src", "index.ts"), /import usersRoutes from '\.\/modules\/users\/users\.routes';/);
+    assert.match(read(project, "src", "app.ts"), /import usersRoutes from '\.\/modules\/users\/users\.routes';/);
     assert.match(read(project, "src", "modules", "users", "users.controller.ts"), /export async function getAll\(req: Request/);
     assert.equal(exists(project, "src", "modules", "users", "users.model.js"), false);
   });
@@ -240,9 +240,9 @@ describe("add", () => {
       "const app = require('express')();\n// ROUTE_IMPORTS\n\n// ROUTE_MIDDLEWARE\n"
     );
 
-    assert.equal(cli(project, "add", "users").code, 0);
+    assert.equal(cli(project, "add", "users", "--skip-install").code, 0);
     const model = read(project, "src", "modules", "users", "users.model.js");
-    assert.match(model, /mongoose\.model\('Users'/);
+    assert.match(model, /mongoose\.model\('User'/);
     assert.doesNotMatch(model, /getMongoConnection/);
     assertValidJs(project);
 
@@ -326,5 +326,366 @@ describe("add-db", () => {
     assert.match(cli(project, "add-db").err, /name for the database connection/);
 
     assert.equal(read(project, "src", "config", "databases.js"), before);
+  });
+});
+
+describe("generated project (v1.3.0)", () => {
+  test("has an app file, tests and the module helpers", () => {
+    const project = createProject("gen-files");
+
+    for (const file of [
+      "src/app.js",
+      "src/index.js",
+      "src/middleware/validate.js",
+      "src/utils/listQuery.js",
+      "tests/app.test.js",
+    ]) {
+      assert.ok(exists(project, file), file);
+    }
+    assert.match(read(project, "src", "app.js"), /\/\/ ROUTE_IMPORTS[\s\S]*\/\/ ROUTE_MIDDLEWARE[\s\S]*module\.exports = app;/);
+    assert.match(read(project, "src", "index.js"), /const app = require\('\.\/app'\);/);
+
+    const pkg = JSON.parse(read(project, "package.json"));
+    assert.equal(pkg.scripts.test, "node --test");
+    assert.ok(pkg.dependencies.zod);
+    assert.ok(pkg.devDependencies.supertest);
+    // MongoDB needs no migrations
+    assert.equal(pkg.scripts.migrate, undefined);
+    assert.equal(exists(project, "src", "scripts"), false);
+    assertValidJs(project);
+  });
+
+  test("SQL projects get a migration runner", () => {
+    const project = createProject("gen-sql", "--db", "postgres");
+    const pkg = JSON.parse(read(project, "package.json"));
+
+    assert.deepEqual(Object.keys(pkg.scripts), ["start", "dev", "test", "migrate", "migrate:down", "migrate:status"]);
+    assert.equal(pkg.scripts.migrate, "node src/scripts/migrate.js up");
+    assert.ok(pkg.dependencies.umzug);
+    assert.ok(exists(project, "src", "scripts", "migrate.js"));
+    assert.match(read(project, "src", "config", "sql.js"), /getMigrator/);
+    assertValidJs(project);
+  });
+
+  test("TypeScript projects run their tests with tsx", () => {
+    const project = createProject("gen-ts", "--ts", "--db", "mysql");
+    const pkg = JSON.parse(read(project, "package.json"));
+
+    assert.equal(pkg.scripts.test, 'tsx --test "tests/**/*.test.ts"');
+    assert.equal(pkg.scripts.migrate, "tsx src/scripts/migrate.ts up");
+    assert.ok(pkg.devDependencies["@types/supertest"]);
+    for (const file of ["src/app.ts", "tests/app.test.ts", "src/scripts/migrate.ts", "src/utils/listQuery.ts"]) {
+      assert.ok(exists(project, file), file);
+    }
+  });
+});
+
+describe("add with fields", () => {
+  test("uses the default fields when none are given", () => {
+    const project = createProject("fields-default");
+    cli(project, "add", "users");
+
+    const validation = read(project, "src", "modules", "users", "users.validation.js");
+    assert.match(validation, /name: z\.string\(\)\.trim\(\)\.min\(1\),/);
+    assert.match(validation, /description: z\.string\(\)\.trim\(\)\.min\(1\)\.nullish\(\),/);
+    assert.match(validation, /status: z\.enum\(\['active', 'inactive'\]\)\.optional\(\)/);
+  });
+
+  test("generates Mongoose schema and Zod validation from the fields", () => {
+    const project = createProject("fields-mongo");
+    const result = cli(project, "add", "products", "name:string:unique", "price:number", "stock:int:default=0",
+      "status:enum:draft,published:default=draft", "releasedAt:date:optional", "url:string:default=http://x.io/a");
+    assert.equal(result.code, 0, result.err);
+
+    const model = read(project, "src", "modules", "products", "products.model.js");
+    assert.match(model, /name: \{\n\s+type: String,\n\s+required: true,\n\s+trim: true,\n\s+unique: true\n\s+\}/);
+    assert.match(model, /stock: \{\n\s+type: Number,\n\s+validate: \{ validator: Number\.isInteger[^\n]+\n\s+default: 0\n/);
+    assert.match(model, /status: \{\n\s+type: String,\n\s+enum: \['draft', 'published'\],\n\s+default: 'draft'\n/);
+    assert.match(model, /url: \{[\s\S]*?default: 'http:\/\/x\.io\/a'/);
+
+    const validation = read(project, "src", "modules", "products", "products.validation.js");
+    assert.match(validation, /price: z\.number\(\),/);
+    assert.match(validation, /stock: z\.number\(\)\.int\(\)\.optional\(\),/);
+    assert.match(validation, /releasedAt: z\.string\(\)\.refine\([^\n]+\.nullish\(\),/);
+    assertValidJs(project);
+  });
+
+  test("generates a Sequelize model and its migration from the fields", () => {
+    const project = createProject("fields-sql", "--db", "postgres");
+    assert.equal(cli(project, "add", "order-items", "title:string", "qty:integer", "paid:boolean:default=false").code, 0);
+
+    const model = read(project, "src", "modules", "order-items", "order-items.model.js");
+    assert.match(model, /sequelize\.define\('OrderItem', \{/);
+    assert.match(model, /tableName: 'order_items'/);
+    assert.match(model, /qty: \{\n\s+type: DataTypes\.INTEGER,\n\s+allowNull: false\n\s+\}/);
+
+    const [migration, ...others] = fs.readdirSync(path.join(project, "src", "migrations", "default"));
+    assert.deepEqual(others, []);
+    assert.match(migration, /^\d{14}-create-order-items\.js$/);
+    const content = read(project, "src", "migrations", "default", migration);
+    assert.match(content, /createTable\('order_items', \{\n\s+id: \{/);
+    assert.match(content, /paid: \{\n\s+type: DataTypes\.BOOLEAN,\n\s+allowNull: false,\n\s+defaultValue: false\n/);
+    assert.match(content, /dropTable\('order_items'\)/);
+    assertValidJs(project);
+  });
+
+  test("rejects invalid fields without writing anything", () => {
+    const project = createProject("fields-invalid");
+    const appBefore = read(project, "src", "app.js");
+
+    const cases = [
+      [["price:money"], /unknown type "money"/],
+      [["price"], /the type is missing/],
+      [["id:string"], /added automatically/],
+      [["name:string", "name:text"], /defined more than once/],
+      [["status:enum"], /list the allowed values/],
+      [["status:enum:a,b:default=c"], /not one of: a, b/],
+      [["stock:integer:default=1.5"], /not an integer/],
+      [["active:boolean:default=yes"], /true or false/],
+      [["bio:text:unique"], /cannot be unique/],
+      [["born:date:default=2020-01-01"], /not supported for date/],
+      [["name:string:required:secret"], /unknown option "secret"/],
+      [["1name:string"], /not a valid field name/],
+    ];
+
+    for (const [fields, error] of cases) {
+      const result = cli(project, "add", "items", ...fields);
+      assert.equal(result.code, 1, fields.join(" "));
+      assert.match(result.err, error, fields.join(" "));
+    }
+
+    assert.equal(exists(project, "src", "modules", "items"), false);
+    assert.equal(read(project, "src", "app.js"), appBefore);
+  });
+
+  test("controllers support pagination, sorting and search", () => {
+    const project = createProject("fields-list", "--db", "mysql");
+    cli(project, "add", "articles", "title:string", "views:integer:default=0");
+
+    const controller = read(project, "src", "modules", "articles", "articles.controller.js");
+    assert.match(controller, /const SORTABLE_FIELDS = \['id', 'title', 'views', 'createdAt', 'updatedAt'\];/);
+    assert.match(controller, /const SEARCHABLE_FIELDS = \['title'\];/);
+    assert.match(controller, /findAndCountAll\(\{ where, order: sort, offset, limit \}\)/);
+    assert.match(controller, /tieBreaker: 'id'/);
+    assert.match(controller, /pagination: paginate\(total, page, limit\)/);
+
+    // No text fields: no search
+    cli(project, "add", "counters", "value:integer");
+    const counters = read(project, "src", "modules", "counters", "counters.controller.js");
+    assert.doesNotMatch(counters, /SEARCHABLE_FIELDS|Op\b/);
+    assertValidJs(project);
+  });
+
+  test("every module gets validation-only tests", () => {
+    const project = createProject("fields-tests");
+    cli(project, "add", "products", "price:number");
+
+    const content = read(project, "tests", "products.test.js");
+    assert.match(content, /require\('\.\.\/src\/app'\)/);
+    assert.match(content, /post\('\/products'\)\.send\(\{ price: 'not-a-number' \}\)/);
+    assert.match(content, /error\.field === 'price'/);
+  });
+});
+
+describe("naming", () => {
+  test("models are singular, tables and messages read naturally", () => {
+    const project = createProject("naming", "--db", "postgres");
+    cli(project, "add", "people");
+    cli(project, "add", "categories");
+
+    const model = read(project, "src", "modules", "people", "people.model.js");
+    assert.match(model, /const PersonModel = sequelize\.define\('Person'/);
+    assert.match(model, /tableName: 'people'/);
+
+    const controller = read(project, "src", "modules", "categories", "categories.controller.js");
+    assert.match(controller, /'Category created successfully'/);
+    assert.match(controller, /'Categories retrieved successfully'/);
+    assert.match(controller, /'Category not found'/);
+  });
+
+  test("rejects a module whose model name is already used", () => {
+    const project = createProject("naming-clash");
+    cli(project, "add", "users");
+
+    const result = cli(project, "add", "user");
+    assert.equal(result.code, 1);
+    assert.match(result.err, /"users" already defines the model "User"/);
+    assert.equal(exists(project, "src", "modules", "user"), false);
+  });
+});
+
+describe("add-migration", () => {
+  test("creates empty migrations in timestamp order", () => {
+    const project = createProject("mig", "--db", "postgres");
+    cli(project, "add", "users");
+    assert.equal(cli(project, "add-migration", "add-phone-to-users").code, 0);
+    assert.equal(cli(project, "add-migration", "add_index").code, 0);
+
+    const files = fs.readdirSync(path.join(project, "src", "migrations", "default"));
+    assert.equal(files.length, 3);
+    assert.match(files[1], /^\d{14}-add-phone-to-users\.js$/);
+    assert.match(files[2], /^\d{14}-add-index\.js$/);
+    // Strictly increasing, even when created within the same second
+    assert.deepEqual([...files].sort(), files);
+    assert.equal(new Set(files.map((file) => file.slice(0, 14))).size, 3);
+    assertValidJs(project);
+  });
+
+  test("works per connection and only for SQL", () => {
+    const project = createProject("mig-multi");
+    cli(project, "add-db", "analytics", "--type", "mysql", "--skip-install");
+
+    assert.match(cli(project, "add-migration", "x").err, /not a SQL database/);
+    assert.match(cli(project, "add-migration", "x", "--db", "nope").err, /does not exist/);
+    assert.match(cli(project, "add-migration", "../x", "--db", "analytics").err, /Invalid migration name/);
+    assert.match(cli(project, "add-migration").err, /name for the migration/);
+
+    assert.equal(cli(project, "add-migration", "seed", "--db", "analytics").code, 0);
+    assert.equal(fs.readdirSync(path.join(project, "src", "migrations", "analytics")).length, 1);
+  });
+
+  test("add-db sets up migrations when the first SQL database is added", () => {
+    const project = createProject("mig-add-db");
+    cli(project, "add-db", "reports", "--type", "postgres", "--skip-install");
+
+    const pkg = JSON.parse(read(project, "package.json"));
+    assert.deepEqual(Object.keys(pkg.scripts), ["start", "dev", "test", "migrate", "migrate:down", "migrate:status"]);
+    assert.ok(pkg.dependencies.umzug);
+    assert.ok(exists(project, "src", "scripts", "migrate.js"));
+
+    cli(project, "add", "sales", "amount:number", "--db", "reports");
+    assert.equal(fs.readdirSync(path.join(project, "src", "migrations", "reports")).length, 1);
+    // MongoDB modules need none
+    cli(project, "add", "notes");
+    assert.equal(exists(project, "src", "migrations", "default"), false);
+  });
+});
+
+describe("projects generated by v1.2.0", () => {
+  /** Turn a fresh project into what v1.2.0 generated */
+  function makeV120Project(name) {
+    const project = createProject(name, "--db", "postgres");
+    const app = read(project, "src", "app.js");
+
+    // Routes lived in src/index.js, and there was no app file
+    fs.writeFileSync(path.join(project, "src", "index.js"), app.replace("module.exports = app;", "app.listen(5000);"));
+    fs.rmSync(path.join(project, "src", "app.js"));
+    for (const file of ["src/middleware/validate.js", "src/utils/listQuery.js", "src/scripts", "tests"]) {
+      fs.rmSync(path.join(project, file), { recursive: true });
+    }
+    // sync() instead of migrations
+    fs.writeFileSync(path.join(project, "src", "config", "sql.js"), "// uses sequelize.sync()\n");
+
+    const pkg = JSON.parse(read(project, "package.json"));
+    delete pkg.dependencies.zod;
+    delete pkg.devDependencies.supertest;
+    fs.writeFileSync(path.join(project, "package.json"), JSON.stringify(pkg, null, 2));
+    return project;
+  }
+
+  test("new modules add what they need", () => {
+    const project = makeV120Project("v120");
+    const result = cli(project, "add", "products", "name:string", "--skip-install");
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /Added to package\.json: zod\nRun "npm install"/);
+
+    assert.match(read(project, "src", "index.js"), /app\.use\('\/products', productsRoutes\);/);
+    assert.ok(exists(project, "src", "middleware", "validate.js"));
+    assert.ok(exists(project, "src", "utils", "listQuery.js"));
+    assert.ok(JSON.parse(read(project, "package.json")).dependencies.zod);
+    // No test runner and no migrations in those projects
+    assert.equal(exists(project, "tests"), false);
+    assert.equal(exists(project, "src", "migrations"), false);
+  });
+
+  test("add-migration explains that migrations need a newer project", () => {
+    const project = makeV120Project("v120-mig");
+    const result = cli(project, "add-migration", "x");
+    assert.equal(result.code, 1);
+    assert.match(result.err, /before migrations were added/);
+  });
+});
+
+describe("interactive create", () => {
+  const { PassThrough } = require("node:stream");
+  const { askCreateOptions } = require("../lib/commands/createProject");
+
+  /** Answer the prompts with the given lines and collect what was printed */
+  async function ask(options, lines) {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    let printed = "";
+    output.on("data", (chunk) => (printed += chunk));
+    input.end(lines.map((line) => `${line}\n`).join(""));
+
+    const result = await askCreateOptions(options, { input, output });
+    return { result, printed };
+  }
+
+  test("asks for everything that is missing", async () => {
+    const { result, printed } = await ask({}, ["../bad", "my-api", "7", "2", "postgres"]);
+
+    assert.deepEqual(result, { name: "my-api", language: "ts", dbType: "postgres" });
+    assert.match(printed, /Invalid project name "\.\.\/bad"/);
+    assert.match(printed, /Please enter a number from 1 to 2/);
+  });
+
+  test("Enter picks the default, given values are not asked", async () => {
+    const { result, printed } = await ask({ name: "x", dbType: "mysql" }, [""]);
+
+    assert.deepEqual(result, { name: "x", language: "js", dbType: "mysql" });
+    assert.doesNotMatch(printed, /Project name|Database/);
+  });
+
+  test("end of input cancels", async () => {
+    await assert.rejects(ask({}, []), /Cancelled/);
+  });
+
+  test("non-interactive runs never prompt", () => {
+    const result = cli(workDir, "create");
+    assert.equal(result.code, 1);
+    assert.match(result.err, /provide a project name/);
+  });
+});
+
+describe("generated helpers", () => {
+  const { parseListQuery, paginate, escapeLike, escapeRegex } = require("../lib/templates/static/listQuery.js");
+  const sortable = ["name", "createdAt"];
+
+  test("parseListQuery reads paging, sorting and search", () => {
+    assert.deepEqual(parseListQuery({}, { sortable }), {
+      page: 1, limit: 20, offset: 0, sort: [["createdAt", "desc"]], search: "",
+    });
+    assert.deepEqual(parseListQuery({ page: "3", limit: "500", sort: "name,-createdAt", search: " a " }, { sortable }), {
+      page: 3, limit: 100, offset: 200, sort: [["name", "asc"], ["createdAt", "desc"]], search: "a",
+    });
+  });
+
+  test("parseListQuery appends the tie-breaker once", () => {
+    assert.deepEqual(parseListQuery({}, { sortable, tieBreaker: "id" }).sort, [["createdAt", "desc"], ["id", "asc"]]);
+    assert.deepEqual(
+      parseListQuery({ sort: "-id" }, { sortable: ["id"], tieBreaker: "id" }).sort,
+      [["id", "desc"]]
+    );
+  });
+
+  test("parseListQuery rejects bad input with a 400", () => {
+    for (const query of [{ page: "0" }, { limit: "abc" }, { page: "1.5" }, { sort: "password" }]) {
+      assert.throws(() => parseListQuery(query, { sortable }), (error) => error.statusCode === 400, JSON.stringify(query));
+    }
+  });
+
+  test("paginate and the escape helpers", () => {
+    assert.deepEqual(paginate(41, 2, 20), { page: 2, limit: 20, total: 41, totalPages: 3 });
+    assert.equal(escapeLike("50%_off\\"), "50\\%\\_off\\\\");
+    assert.ok(new RegExp(escapeRegex("a.b(c)")).test("a.b(c)"));
+    assert.ok(!new RegExp(escapeRegex("a.b")).test("axb"));
+  });
+});
+
+describe("command line", () => {
+  test("only add accepts extra arguments", () => {
+    assert.match(cli(workDir, "create", "a", "b").err, /Unexpected argument: b/);
+    assert.equal(exists(workDir, "a"), false);
   });
 });
