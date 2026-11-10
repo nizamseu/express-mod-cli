@@ -689,3 +689,187 @@ describe("command line", () => {
     assert.equal(exists(workDir, "a"), false);
   });
 });
+
+describe("add-auth", () => {
+  const authFiles = (ext) => [
+    `src/config/auth.${ext}`,
+    `src/utils/security.${ext}`,
+    `src/utils/mailer.${ext}`,
+    `src/middleware/auth.${ext}`,
+    `src/modules/auth/user.model.${ext}`,
+    `src/modules/auth/refresh-token.model.${ext}`,
+    `src/modules/auth/auth-token.model.${ext}`,
+    `src/modules/auth/auth.emails.${ext}`,
+    `src/modules/auth/auth.repository.${ext}`,
+    `src/modules/auth/auth.validation.${ext}`,
+    `src/modules/auth/auth.controller.${ext}`,
+    `src/modules/auth/auth.routes.${ext}`,
+    `src/scripts/set-role.${ext}`,
+    `tests/auth.test.${ext}`,
+  ];
+
+  test("sets up authentication in a MongoDB project", () => {
+    const project = createProject("auth-mongo");
+    const result = cli(project, "add-auth", "--skip-install");
+    assert.equal(result.code, 0, result.err);
+
+    for (const file of authFiles("js")) assert.ok(exists(project, file), file);
+    assert.match(read(project, "src", "modules", "auth", "user.model.js"), /getMongoConnection\('default'\)\.model\('User'/);
+    assert.equal(exists(project, "src", "migrations"), false);
+
+    const app = read(project, "src", "app.js");
+    assert.match(app, /const helmet = require\('helmet'\);\nconst cookieParser = require\('cookie-parser'\);/);
+    assert.match(app, /app\.use\(express\.urlencoded\(\{ extended: true \}\)\);\napp\.use\(cookieParser\(\)\);/);
+    assert.match(app, /app\.use\('\/auth', authRoutes\);/);
+
+    const pkg = JSON.parse(read(project, "package.json"));
+    for (const name of ["bcryptjs", "cookie-parser", "express-rate-limit", "jsonwebtoken", "nodemailer"]) assert.ok(pkg.dependencies[name], name);
+    assert.match(read(project, ".env"), /^APP_URL=http:\/\/localhost:3000$/m);
+    assert.match(read(project, ".env"), /^SMTP_HOST=$/m);
+    assert.equal(pkg.scripts["auth:set-role"], "node src/scripts/set-role.js");
+    assert.deepEqual(JSON.parse(read(project, ".expressmodrc.json")).auth, { connection: "default" });
+
+    const env = read(project, ".env");
+    assert.equal(env.match(/^JWT_SECRET=/gm).length, 1);
+    assert.doesNotMatch(env, /JWT Configuration \(optional\)/);
+    const secret = env.match(/^JWT_SECRET=(.+)$/m)[1];
+    assert.ok(secret.length >= 32);
+    assert.match(read(project, ".env.example"), /^JWT_SECRET=change-me/m);
+    assertValidJs(project);
+  });
+
+  test("replaces an existing JWT_SECRET instead of defining it twice", () => {
+    const project = createProject("auth-env");
+    // Projects from v1.3.0 and older have a placeholder secret
+    fs.appendFileSync(path.join(project, ".env"), "\n# JWT Configuration (optional)\nJWT_SECRET=your_jwt_secret_here\n\nAPI_VERSION_2=x\n");
+    cli(project, "add-auth", "--skip-install");
+
+    const env = read(project, ".env");
+    assert.equal(env.match(/^JWT_SECRET=/gm).length, 1);
+    assert.doesNotMatch(env, /your_jwt_secret_here|JWT Configuration \(optional\)/);
+    assert.match(env, /^API_VERSION_2=x$/m);
+  });
+
+  test("SQL projects get a migration, and every project its own secret", () => {
+    const one = createProject("auth-sql", "--db", "postgres");
+    const two = createProject("auth-sql-2", "--db", "mysql");
+    cli(one, "add-auth", "--skip-install");
+    cli(two, "add-auth", "--skip-install");
+
+    const [migration] = fs.readdirSync(path.join(one, "src", "migrations", "default"));
+    assert.match(migration, /^\d{14}-create-auth-tables\.js$/);
+    const content = read(one, "src", "migrations", "default", migration);
+    assert.match(content, /createTable\('users'/);
+    assert.match(content, /emailVerifiedAt: \{ type: DataTypes\.DATE \}/);
+    assert.match(content, /createTable\('auth_tokens'/);
+    assert.match(content, /dropTable\('auth_tokens'\);\n\s+await queryInterface\.dropTable\('refresh_tokens'\);\n\s+await queryInterface\.dropTable\('users'\)/);
+    assert.match(content, /references: \{ model: 'users', key: 'id' \},\n\s+onDelete: 'CASCADE'/);
+    assert.match(read(one, "src", "modules", "auth", "auth.repository.js"), /RefreshTokenModel\.update/);
+
+    const secret = (project) => read(project, ".env").match(/^JWT_SECRET=(.+)$/m)[1];
+    assert.notEqual(secret(one), secret(two));
+    assertValidJs(one);
+  });
+
+  test("TypeScript projects get typed files and type definitions", () => {
+    const project = createProject("auth-ts", "--ts", "--db", "postgres");
+    assert.equal(cli(project, "add-auth", "--skip-install").code, 0);
+
+    for (const file of authFiles("ts")) assert.ok(exists(project, file), file);
+    assert.match(read(project, "src", "app.ts"), /import helmet from 'helmet';\nimport cookieParser from 'cookie-parser';/);
+    assert.match(read(project, "src", "middleware", "auth.ts"), /interface Request \{[\s\S]*user\?: AuthUser;/);
+
+    const pkg = JSON.parse(read(project, "package.json"));
+    assert.ok(pkg.devDependencies["@types/jsonwebtoken"] && pkg.devDependencies["@types/cookie-parser"]);
+    assert.equal(pkg.dependencies["@types/jsonwebtoken"], undefined);
+    assert.equal(pkg.scripts["auth:set-role"], "tsx src/scripts/set-role.ts");
+  });
+
+  test("users can live on another connection", () => {
+    const project = createProject("auth-multi", "--db", "postgres");
+    cli(project, "add-db", "accounts", "--type", "mongodb", "--skip-install");
+    assert.equal(cli(project, "add-auth", "--db", "accounts", "--skip-install").code, 0);
+
+    assert.match(read(project, "src", "modules", "auth", "user.model.js"), /getMongoConnection\('accounts'\)/);
+    assert.equal(exists(project, "src", "migrations", "default"), false);
+    assert.deepEqual(JSON.parse(read(project, ".expressmodrc.json")).auth, { connection: "accounts" });
+  });
+
+  test("refuses to run twice or over existing code", () => {
+    const project = createProject("auth-refuse");
+    assert.match(cli(project, "add-auth", "--db", "nope").err, /"nope" does not exist/);
+    assert.match(cli(project, "add-auth", "extra").err, /Unexpected argument: extra/);
+
+    cli(project, "add-auth", "--skip-install");
+    assert.match(cli(project, "add-auth").err, /already set up/);
+
+    const withUsers = createProject("auth-users-module");
+    cli(withUsers, "add", "users");
+    const result = cli(withUsers, "add-auth");
+    assert.equal(result.code, 1);
+    assert.match(result.err, /"users" already defines the model "User"/);
+    assert.equal(exists(withUsers, "src", "modules", "auth"), false);
+  });
+
+  test("stops without writing when the app file was changed", () => {
+    const project = createProject("auth-app-changed");
+    const appPath = path.join(project, "src", "app.js");
+    fs.writeFileSync(appPath, read(appPath).replace("const helmet = require('helmet');\n", ""));
+    const before = read(appPath);
+
+    const result = cli(project, "add-auth");
+    assert.equal(result.code, 1);
+    assert.match(result.err, /Add these lines yourself[\s\S]*require\('cookie-parser'\)[\s\S]*app\.use\(cookieParser\(\)\)/);
+    assert.equal(read(appPath), before);
+    assert.equal(exists(project, "src", "modules", "auth"), false);
+    assert.equal(JSON.parse(read(project, ".expressmodrc.json")).auth, undefined);
+  });
+});
+
+describe("protected modules", () => {
+  test("--auth and --role need add-auth first", () => {
+    const project = createProject("protect-no-auth");
+    assert.match(cli(project, "add", "orders", "--auth").err, /Run "express-mod-cli add-auth" first/);
+    assert.match(cli(project, "add", "orders", "--role", "admin").err, /Run "express-mod-cli add-auth" first/);
+    assert.equal(exists(project, "src", "modules", "orders"), false);
+  });
+
+  test("--auth guards every route, and the tests send a token", () => {
+    const project = createProject("protect-auth");
+    cli(project, "add-auth", "--skip-install");
+    assert.equal(cli(project, "add", "orders", "total:number", "--auth").code, 0);
+
+    const routes = read(project, "src", "modules", "orders", "orders.routes.js");
+    assert.match(routes, /const \{ requireAuth \} = require\('\.\.\/\.\.\/middleware\/auth'\);/);
+    assert.match(routes, /router\.use\(requireAuth\);\n\n\/\/ CRUD routes/);
+
+    const tests = read(project, "tests", "orders.test.js");
+    assert.match(tests, /needs a logged-in user[\s\S]*401/);
+    assert.match(tests, /\.set\('Authorization', tokenFor\('user'\)\)\.send\(\{ total: 'not-a-number' \}\)/);
+    assert.doesNotMatch(tests, /403/);
+    assertValidJs(project);
+  });
+
+  test("--role requires that role", () => {
+    const project = createProject("protect-role", "--ts");
+    cli(project, "add-auth", "--skip-install");
+    assert.equal(cli(project, "add", "reports", "title:string", "--role", "admin").code, 0);
+
+    const routes = read(project, "src", "modules", "reports", "reports.routes.ts");
+    assert.match(routes, /import \{ requireRole \} from '\.\.\/\.\.\/middleware\/auth';/);
+    assert.match(routes, /router\.use\(requireRole\('admin'\)\);/);
+    assert.match(read(project, "tests", "reports.test.ts"), /needs the "admin" role[\s\S]*tokenFor\('user'\)[\s\S]*403/);
+
+    assert.match(cli(project, "add", "x", "--role", "bad role").err, /Invalid role/);
+  });
+
+  test("modules cannot reuse the auth model names", () => {
+    const project = createProject("protect-names");
+    cli(project, "add-auth", "--skip-install");
+
+    assert.match(cli(project, "add", "users").err, /"auth" already defines the model "User"/);
+    assert.match(cli(project, "add", "refresh-tokens").err, /"auth" already defines the model "RefreshToken"/);
+    assert.match(cli(project, "add", "auth-tokens").err, /"auth" already defines the model "AuthToken"/);
+    assert.equal(cli(project, "add", "profiles").code, 0);
+  });
+});
