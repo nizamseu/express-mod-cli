@@ -1,7 +1,7 @@
 {
   "name": "express-mod-cli",
-  "version": "1.2.0",
-  "description": "Modern Express.js application generator with clean MVC architecture, JavaScript or TypeScript, and multi-database support (MongoDB, PostgreSQL, MySQL). Install globally using 'npm install -g express-mod-cli'",
+  "version": "1.3.0",
+  "description": "Modern Express.js application generator: clean MVC modules with your own fields, Zod validation, pagination, SQL migrations and tests, in JavaScript or TypeScript, with MongoDB, PostgreSQL and MySQL (multiple databases). Install globally using 'npm install -g express-mod-cli'",
   "preferGlobal": true,
   "main": "bin/index.js",
   "bin": {
@@ -13,9 +13,6 @@
   ],
   "engines": {
     "node": ">=18.3.0"
-  },
-  "dependencies": {
-    "pluralize": "^8.0.0"
   },
   "scripts": {
     "test": "node --test"
@@ -38,12 +35,19 @@
     "express-app",
     "api-generator",
     "rest-api",
-    "nodejs"
+    "nodejs",
+    "zod",
+    "validation",
+    "migrations",
+    "pagination"
   ],
   "author": "Nizam Uddin",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nizamseu/express-mod-cli.git"
+  },
+  "dependencies": {
+    "pluralize": "^8.0.0"
   }
 }
