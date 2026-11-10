@@ -1,12 +1,13 @@
 # Express Modular Generator
 
-A modern command-line tool to generate Express.js applications with clean MVC architecture and Mongoose ODM integration.
+A modern command-line tool to generate Express.js applications with clean MVC architecture, in JavaScript or TypeScript, with one or many databases.
 
 ## ✨ Features
 
 - 🏗️ **Modular MVC Architecture** - Clean separation of concerns
-- 🍃 **Mongoose Integration** - Modern MongoDB ODM with schema validation
-- 🚀 **Latest Dependencies** - Express 5.x, Mongoose 8.x, and more
+- 🟦 **JavaScript or TypeScript** - Pick the language when you create the project
+- 🗄️ **MongoDB, PostgreSQL, MySQL** - Mongoose for MongoDB, Sequelize for SQL
+- 🔀 **Multiple Databases** - Connect several databases in one project, even of different kinds
 - 🔒 **Security Ready** - CORS, Helmet, and error handling built-in
 - ⚡ **Zero Configuration** - Ready to run with minimal setup
 - 📦 **Modular Design** - Easy to add and manage modules
@@ -17,12 +18,19 @@ A modern command-line tool to generate Express.js applications with clean MVC ar
 npm install -g express-mod-cli
 ```
 
+Requires Node.js 18.3 or newer.
+
 ## 🚀 Quick Start
 
 ### Create a new project
 
 ```bash
+# JavaScript + MongoDB (the defaults)
 express-mod-cli create my-project
+
+# TypeScript + PostgreSQL
+express-mod-cli create my-project --ts --db postgres
+
 cd my-project
 npm run dev
 ```
@@ -32,86 +40,172 @@ npm run dev
 ```bash
 express-mod-cli add users
 express-mod-cli add products
-express-mod-cli add orders
+express-mod-cli add order-items
+```
+
+### Connect another database
+
+```bash
+express-mod-cli add-db analytics --type postgres
+express-mod-cli add reports --db analytics
 ```
 
 ## 📖 Commands
 
-| Command                 | Description                         | Example                         |
-| ----------------------- | ----------------------------------- | ------------------------------- |
-| `create <project-name>` | Create a new Express project        | `express-mod-cli create my-app` |
-| `add <module-name>`     | Add a new module to current project | `express-mod-cli add users`     |
-| `--help` or `-h`        | Show help information               | `express-mod-cli --help`        |
-| `--version` or `-v`     | Show version number                 | `express-mod-cli --version`     |
+| Command                 | Description                                | Example                                         |
+| ----------------------- | ------------------------------------------ | ----------------------------------------------- |
+| `create <project-name>` | Create a new Express project               | `express-mod-cli create my-app --ts`            |
+| `add <module-name>`     | Add a new module to the current project    | `express-mod-cli add users`                     |
+| `add-db <name>`         | Add a database connection to the project   | `express-mod-cli add-db analytics --type mysql` |
+| `--help` or `-h`        | Show help information                      | `express-mod-cli --help`                        |
+| `--version` or `-v`     | Show version number                        | `express-mod-cli --version`                     |
+
+### Options
+
+| Command  | Option                 | Description                                                                |
+| -------- | ---------------------- | -------------------------------------------------------------------------- |
+| `create` | `--db <type>`          | `mongodb` (default), `postgres` or `mysql`                                 |
+| `create` | `--ts`, `--typescript` | Generate a TypeScript project                                              |
+| `create` | `--js`, `--javascript` | Generate a JavaScript project (default)                                    |
+| `create` | `--skip-install`       | Don't run `npm install`                                                    |
+| `add`    | `--db <connection>`    | The database connection the module uses (default: `default`)               |
+| `add-db` | `--type <type>`        | `mongodb`, `postgres` or `mysql` (default: same as the default connection) |
+| `add-db` | `--skip-install`       | Don't run `npm install` for newly needed packages                          |
+
+Module names may contain letters, numbers, `-` and `_` (`users`, `user-profile`, `order_items`).
+`add` and `add-db` detect the project's language from `.expressmodrc.json`, so there is no language flag for them.
+
+## 🟦 JavaScript and TypeScript
+
+|                | JavaScript (default)  | TypeScript (`--ts`)                    |
+| -------------- | --------------------- | -------------------------------------- |
+| Source files   | `src/**/*.js`         | `src/**/*.ts`                          |
+| `npm run dev`  | `nodemon src/index.js` | `tsx watch src/index.ts`              |
+| `npm run build` | -                    | `tsc` (output in `dist/`)              |
+| `npm start`    | `node src/index.js`   | `node dist/index.js` (run build first) |
+| Extra          | -                     | `npm run typecheck`, `tsconfig.json`   |
 
 ## 🗄️ Database Configuration
 
-### MongoDB with Mongoose
+Each project has a **default** connection, chosen with `create --db`:
 
-Your generated project uses **Mongoose** for elegant MongoDB object modeling. The configuration is already set up in `src/config/db.js`.
+| `--db`     | Library   | `.env` variables         |
+| ---------- | --------- | ------------------------ |
+| `mongodb`  | Mongoose  | `MONGODB_URI`, `DB_NAME` |
+| `postgres` | Sequelize | `DATABASE_URL`           |
+| `mysql`    | Sequelize | `DATABASE_URL`           |
 
-#### Local MongoDB Setup
+```env
+# MongoDB (local or Atlas)
+MONGODB_URI=mongodb://localhost:27017
+DB_NAME=my_project_db
 
-1. **Install MongoDB locally** or use Docker:
+# PostgreSQL
+DATABASE_URL=postgres://user:password@localhost:5432/my_project_db
 
-   ```bash
-   # Using Docker
-   docker run -d -p 27017:27017 --name mongodb mongo:latest
-   ```
+# MySQL
+DATABASE_URL=mysql://user:password@localhost:3306/my_project_db
+```
 
-2. **Update your .env file:**
-   ```env
-   MONGODB_URI=mongodb://localhost:27017
-   DB_NAME=your_project_name_db
-   PORT=5000
-   NODE_ENV=development
-   ```
+A `.env.example` with the same variables is generated next to `.env` (which is git-ignored).
 
-#### MongoDB Atlas Setup (Cloud)
+For SQL databases, the tables of your models are created on startup if they don't exist yet (`sequelize.sync()`).
+Existing tables are never altered - use migrations for schema changes. The database itself must already exist.
 
-1. **Create a MongoDB Atlas account** at [mongodb.com/atlas](https://www.mongodb.com/cloud/atlas)
-2. **Get your connection string** from Atlas dashboard
-3. **Update your .env file:**
-   ```env
-   MONGODB_URI=mongodb+srv://username:password@cluster0.xxxxx.mongodb.net
-   DB_NAME=your_project_name_db
-   PORT=5000
-   NODE_ENV=production
-   ```
+## 🔀 Multiple Databases
+
+Add as many connections as you need, of any supported kind:
+
+```bash
+express-mod-cli add-db analytics --type postgres
+express-mod-cli add-db logs --type mongodb
+```
+
+`add-db` does everything needed for the new connection:
+
+1. Adds it to `src/config/databases.js`
+2. Creates the connection helper (`src/config/mongodb.js` or `src/config/sql.js`) if the project doesn't have it yet
+3. Adds the variables to `.env` and `.env.example` (`DB_<NAME>_URI`, plus `DB_<NAME>_NAME` for MongoDB)
+4. Installs the packages the database needs
+
+```javascript
+// src/config/databases.js
+const databases = {
+  // DB_CONNECTIONS
+  analytics: {
+    type: "postgres",
+    uri: process.env.DB_ANALYTICS_URI || "postgres://postgres:postgres@localhost:5432/analytics",
+  },
+  default: {
+    type: "mongodb",
+    uri: process.env.MONGODB_URI || "mongodb://localhost:27017",
+    dbName: process.env.DB_NAME || "my_project_db",
+  },
+};
+```
+
+Then tell a module which connection to use:
+
+```bash
+express-mod-cli add reports --db analytics   # Sequelize model on "analytics"
+express-mod-cli add users                    # Mongoose model on "default"
+```
+
+Each model is bound to its connection, so you can also move one by hand:
+
+```javascript
+// MongoDB
+const { getMongoConnection } = require("../../config/mongodb");
+const UsersModel = getMongoConnection("default").model("Users", usersSchema);
+
+// PostgreSQL / MySQL
+const { getSqlConnection } = require("../../config/sql");
+const sequelize = getSqlConnection("analytics");
+```
+
+All connections are opened before the server starts listening and closed on `SIGINT` / `SIGTERM`.
 
 ## 🏗️ Generated Project Structure
-
-Each generated project follows this clean structure:
 
 ```
 my-project/
 ├── src/
 │   ├── config/
-│   │   └── db.js                 # Mongoose connection setup
+│   │   ├── databases.js          # List of database connections
+│   │   ├── db.js                 # Connects / disconnects all of them
+│   │   └── mongodb.js / sql.js   # Connection helpers (one per kind of database in use)
 │   ├── middleware/
 │   │   └── errorHandler.js       # Global error handling
 │   ├── modules/                  # Your business modules
-│   │   └── [module-name]/
-│   │       ├── module.model.js   # Mongoose schema & model
-│   │       ├── module.controller.js # Business logic
-│   │       └── module.routes.js  # Express routes
+│   │   └── users/
+│   │       ├── users.model.js      # Schema & model
+│   │       ├── users.controller.js # Business logic
+│   │       └── users.routes.js     # Express routes
 │   ├── utils/                    # Utility functions
 │   └── index.js                  # Main server file
-├── .env                          # Environment variables
-├── .gitignore                    # Git ignore rules
-└── package.json                  # Dependencies & scripts
+├── .env                          # Environment variables (git-ignored)
+├── .env.example                  # Documents the environment variables
+├── .expressmodrc.json            # Project setup, read by "add" and "add-db"
+├── .gitignore
+└── package.json
 ```
+
+TypeScript projects have the same layout with `.ts` files, plus `tsconfig.json` and `src/config/env.ts`.
+
+> **Keep the marker comments.** `add` and `add-db` insert code below `// ROUTE_IMPORTS`, `// ROUTE_MIDDLEWARE`,
+> `// DB_CONNECTIONS`, `// DB_DRIVER_IMPORTS` and `// DB_DRIVERS`. If one is missing, the command stops and tells you which.
 
 ## 📦 Module Architecture
 
-Each module generates exactly **3 files** following MVC pattern:
+Each module generates exactly **3 files** following MVC pattern. This is `express-mod-cli add users` in a JavaScript + MongoDB project:
 
-### 🔹 Model (`{module}.model.js`)
+### 🔹 Model (`users.model.js`)
 
 ```javascript
 const mongoose = require("mongoose");
+const { getMongoConnection } = require("../../config/mongodb");
 
-const userSchema = new mongoose.Schema(
+const usersSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
@@ -124,17 +218,22 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model("User", userSchema);
+const UsersModel = getMongoConnection("default").model("Users", usersSchema);
+
+module.exports = UsersModel;
 ```
 
-### 🔹 Controller (`{module}.controller.js`)
+On a PostgreSQL / MySQL connection the model is a Sequelize model with the same fields.
+
+### 🔹 Controller (`users.controller.js`)
 
 ```javascript
-const User = require("./user.model");
+const UsersModel = require("./users.model");
 
 async function getAll(req, res, next) {
   try {
-    const items = await User.find().sort({ createdAt: -1 });
+    const items = await UsersModel.find().sort({ createdAt: -1 });
+
     res.json({
       success: true,
       data: items,
@@ -144,21 +243,21 @@ async function getAll(req, res, next) {
     next(error);
   }
 }
-// ... other CRUD methods
+// ... getById, create, update, remove
 ```
 
-### 🔹 Routes (`{module}.routes.js`)
+### 🔹 Routes (`users.routes.js`)
 
 ```javascript
 const express = require("express");
 const router = express.Router();
-const userController = require("./user.controller");
+const usersController = require("./users.controller");
 
-router.get("/", userController.getAll);
-router.get("/:id", userController.getById);
-router.post("/", userController.create);
-router.patch("/:id", userController.update);
-router.delete("/:id", userController.remove);
+router.get("/", usersController.getAll);
+router.get("/:id", usersController.getById);
+router.post("/", usersController.create);
+router.patch("/:id", usersController.update);
+router.delete("/:id", usersController.remove);
 
 module.exports = router;
 ```
@@ -174,6 +273,15 @@ Each generated module provides RESTful API endpoints:
 | `POST`   | `/{module}`     | Create new item | `{ success: true, data: {...}, message: "..." }` |
 | `PATCH`  | `/{module}/:id` | Update item     | `{ success: true, data: {...}, message: "..." }` |
 | `DELETE` | `/{module}/:id` | Delete item     | `{ success: true, data: {...}, message: "..." }` |
+
+Errors always have the shape `{ success: false, message: "..." }`:
+
+| Status | When                                              |
+| ------ | ------------------------------------------------- |
+| `400`  | Validation failed, malformed id or malformed JSON |
+| `404`  | Record or route not found                         |
+| `409`  | A unique value already exists                     |
+| `500`  | Unexpected error (details hidden in production)   |
 
 ### 🔍 Example API Usage
 
@@ -197,24 +305,31 @@ curl -X PATCH http://localhost:5000/users/60d5ec49f1b2c8b1f8e4e1a1 \
 
 ## 🛠️ Technology Stack
 
+Generated projects pin a major version of each dependency (never `latest`), so a new major release can't break a fresh project.
+
 ### Core Dependencies
 
 - **Express.js 5.x** - Fast, unopinionated web framework
-- **Mongoose 8.x** - Elegant MongoDB object modeling
-- **dotenv 17.x** - Environment variable management
+- **dotenv 18.x** - Environment variable management
 - **CORS 2.x** - Cross-origin resource sharing
 - **Helmet 8.x** - Security middleware
 
+### Database (only what the project uses)
+
+- **Mongoose 9.x** - MongoDB object modeling
+- **Sequelize 6.x** - SQL ORM, with **pg 8.x** (PostgreSQL) or **mysql2 3.x** (MySQL)
+
 ### Development Dependencies
 
-- **Nodemon 3.x** - Development server with auto-restart
+- JavaScript: **Nodemon 3.x**
+- TypeScript: **TypeScript 7.x**, **tsx 4.x**, and type definitions for Node, Express and CORS
 
 ## 🏃‍♂️ Development Workflow
 
 1. **Create Project:**
 
    ```bash
-   express-mod-cli create my-ecommerce-app
+   express-mod-cli create my-ecommerce-app --ts
    cd my-ecommerce-app
    ```
 
@@ -244,11 +359,11 @@ curl -X PATCH http://localhost:5000/users/60d5ec49f1b2c8b1f8e4e1a1 \
 
 ### Model Customization
 
-After generating a module, customize the Mongoose schema:
+After generating a module, customize the schema:
 
 ```javascript
 // Example: Enhanced User model
-const userSchema = new mongoose.Schema(
+const usersSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true },
@@ -272,12 +387,20 @@ Add business logic to controllers:
 // Add custom methods
 async function getUserByEmail(req, res, next) {
   try {
-    const user = await User.findOne({ email: req.params.email });
+    const user = await UsersModel.findOne({ email: req.params.email });
     // ... handle response
   } catch (error) {
     next(error);
   }
 }
+```
+
+The generated `create` and `update` handlers pass `req.body` straight to the model - validate or whitelist the fields before using them for anything sensitive.
+
+## 🧪 Developing this CLI
+
+```bash
+npm test   # generates projects in a temp directory and checks the output
 ```
 
 ## 🤝 Contributing
@@ -290,16 +413,32 @@ async function getUserByEmail(req, res, next) {
 
 ## 📝 Changelog
 
-### v1.1.0 (Latest)
+### v1.2.0 (Latest)
+
+- 🟦 **TypeScript** - `create --ts` generates a fully typed project
+- 🗄️ **PostgreSQL & MySQL** - `create --db postgres|mysql` (Sequelize)
+- 🔀 **Multiple databases** - new `add-db` command, and `add <module> --db <connection>`
+- 🐛 **Bug fixes**
+  - Module names with `-` or `_` no longer generate invalid JavaScript
+  - `add` never overwrites an existing module or registers its routes twice
+  - Module and project names are validated (no more files written outside the project)
+  - `add` only runs inside a generated project and stops if a marker comment is missing
+  - A failed `npm install` no longer leaves a half-created project
+  - Duplicate unique values return 409 instead of 500, and all error responses share one shape
+- 🔧 Generated servers shut down gracefully and pin dependency versions instead of `latest`
+- 🧹 The CLI itself now has zero dependencies
+
+Projects created with v1.1.0 keep working with `add`. `add-db` needs a project created with v1.2.0 or newer.
+
+### v1.1.0
 
 - 🆕 **Mongoose Integration** - Replaced native MongoDB driver with Mongoose ODM
 - 🔄 **Modular CLI Architecture** - Refactored CLI into clean, maintainable modules
 - ⬆️ **Updated Dependencies** - Latest versions (Express 5.x, Mongoose 8.x)
 - 🐛 **Bug Fixes** - Resolved template generation issues
 - 📚 **Enhanced Documentation** - Complete API reference and examples
-- 🔒 **Security Improvements** - Zero vulnerabilities in generated projects
 
-### v1.0.11 (Previous)
+### v1.0.11
 
 - Basic project and module generation
 - Native MongoDB driver integration
