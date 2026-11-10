@@ -13,6 +13,7 @@ A modern command-line tool to generate Express.js applications with clean MVC ar
 - 📄 **Pagination, sorting, search** - `?page=2&limit=20&sort=-price&search=phone` on every list endpoint
 - 🔁 **SQL migrations** - Tables are created and changed by migrations, not `sync()`
 - 🧪 **Test-ready** - `npm test` works from the first minute, no database needed
+- 🔐 **Authentication** - `add-auth` adds accounts, refresh tokens, roles, email verification and password reset; `add --auth` protects a module
 - 🔒 **Security Ready** - CORS, Helmet, and error handling built-in
 
 ## 📋 Installation
@@ -21,7 +22,7 @@ A modern command-line tool to generate Express.js applications with clean MVC ar
 npm install -g express-mod-cli
 ```
 
-Requires Node.js 18.3 or newer (generated TypeScript projects run their tests with Node.js 21 or newer).
+Requires Node.js 18.3 or newer (generated TypeScript projects run their tests with Node.js 21 or newer, and `add-auth` needs Node.js 20 or newer for Nodemailer).
 
 ## 🚀 Quick Start
 
@@ -46,6 +47,14 @@ express-mod-cli add products name:string price:number stock:integer:default=0
 express-mod-cli add order-items quantity:integer status:enum:pending,shipped:default=pending
 ```
 
+### Add authentication
+
+```bash
+express-mod-cli add-auth                               # /auth/register, /auth/login, ...
+express-mod-cli add orders total:number --auth         # only for logged-in users
+express-mod-cli add reports title:string --role admin  # only for admins
+```
+
 ### Connect another database
 
 ```bash
@@ -61,6 +70,7 @@ express-mod-cli add reports title:string --db analytics
 | `add <module-name> [fields...]` | Add a module to the current project        | `express-mod-cli add users name:string`         |
 | `add-db <name>`                 | Add a database connection to the project   | `express-mod-cli add-db analytics --type mysql` |
 | `add-migration <name>`          | Add an empty migration to a SQL connection | `express-mod-cli add-migration add-phone`       |
+| `add-auth`                      | Add authentication to the project          | `express-mod-cli add-auth`                      |
 | `--help` or `-h`                | Show help information                      | `express-mod-cli --help`                        |
 | `--version` or `-v`             | Show version number                        | `express-mod-cli --version`                     |
 
@@ -75,14 +85,18 @@ express-mod-cli add reports title:string --db analytics
 | `create`        | `--skip-install`       | Don't run `npm install`                                                    |
 | `add`           | `--db <connection>`    | The database connection the module uses (default: `default`)               |
 | `add`           | `--skip-install`       | Don't run `npm install` when the project needs a new package               |
+| `add`           | `--auth`               | Every route needs a logged-in user (after `add-auth`)                      |
+| `add`           | `--role <role>`        | Every route needs a logged-in user with this role, e.g. `admin`            |
 | `add-db`        | `--type <type>`        | `mongodb`, `postgres` or `mysql` (default: same as the default connection) |
 | `add-db`        | `--skip-install`       | Don't run `npm install` for newly needed packages                          |
 | `add-migration` | `--db <connection>`    | The SQL connection the migration belongs to (default: `default`)           |
+| `add-auth`      | `--db <connection>`    | The connection that stores users (default: `default`)                      |
+| `add-auth`      | `--skip-install`       | Don't run `npm install` for the new packages                               |
 
 When `create` runs in a terminal, it asks for whatever was not given on the command line (Enter picks the default).
 In scripts and CI it never asks: pass `--ts`/`--js` and `--db`, or `-y` for the defaults.
 
-`add`, `add-db` and `add-migration` detect the project's language from `.expressmodrc.json`, so there is no language flag for them.
+`add`, `add-db`, `add-migration` and `add-auth` detect the project's language from `.expressmodrc.json`, so there is no language flag for them.
 
 ## 🧩 Fields
 
@@ -200,6 +214,117 @@ npm test
 `tests/app.test.js` checks the 404 and malformed-JSON handling, and every `add` writes `tests/<module>.test.js` with validation tests.
 They import `src/app`, which builds the Express app without connecting to a database or opening a port, so they run anywhere, including CI.
 
+## 🔐 Authentication
+
+```bash
+express-mod-cli add-auth [--db <connection>]
+```
+
+adds email + password accounts with short-lived access tokens, rotating refresh tokens, email verification and password reset:
+
+| Method | Endpoint                | Body                                  | Needs access token |
+| ------ | ----------------------- | ------------------------------------- | ------------------ |
+| `POST` | `/auth/register`        | `email`, `password`, `name` (optional) | -                  |
+| `POST` | `/auth/login`           | `email`, `password`                   | -                  |
+| `POST` | `/auth/refresh`         | - (cookie) or `refreshToken`          | -                  |
+| `POST` | `/auth/logout`          | - (cookie) or `refreshToken`          | -                  |
+| `POST` | `/auth/logout-all`      | -                                     | yes                |
+| `GET`  | `/auth/me`              | -                                     | yes                |
+| `POST` | `/auth/change-password` | `currentPassword`, `newPassword`      | yes                |
+| `POST` | `/auth/verify-email`    | `token` (from the email)              | -                  |
+| `POST` | `/auth/resend-verification` | `email`                           | -                  |
+| `POST` | `/auth/forgot-password` | `email`                               | -                  |
+| `POST` | `/auth/reset-password`  | `token` (from the email), `newPassword` | -                |
+
+### How it works
+
+- **Register / login** return an **access token** (JWT, 15 minutes) in the body and set a **refresh token** (30 days) as an `httpOnly` cookie that only `/auth` receives, so page scripts can't read it.
+- Send the access token with every request: `Authorization: Bearer <accessToken>`.
+- When it expires (`401`), call `POST /auth/refresh`: the cookie is exchanged for a new access token **and a new refresh token**. The old one stops working.
+- If an old refresh token is used again, someone may have copied it: that whole login ends, and the user has to log in again.
+- **Logout** ends one login, **logout-all** every login of the user, and **change-password** ends every other login.
+
+```javascript
+// In the browser
+const login = await fetch("/auth/login", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  credentials: "include", // store the refresh token cookie
+  body: JSON.stringify({ email, password }),
+});
+const { data } = await login.json();
+
+const me = await fetch("/auth/me", { headers: { Authorization: `Bearer ${data.accessToken}` } });
+
+// Later, when a request returns 401
+const refreshed = await fetch("/auth/refresh", { method: "POST", credentials: "include" });
+```
+
+Mobile apps that can't keep cookies: set `AUTH_REFRESH_IN_BODY=true` to also get the refresh token in the body, and send it back as `{ "refreshToken": "..." }`.
+
+### Email verification and password reset
+
+1. **Register** sends an email with a link to `APP_URL/verify-email?token=...`. Your frontend page reads the token and calls `POST /auth/verify-email { token }`. Afterwards `/auth/me` shows `"emailVerified": true`.
+2. **Forgot password:** `POST /auth/forgot-password { email }` emails a link to `APP_URL/reset-password?token=...`. That page asks for a new password and calls `POST /auth/reset-password { token, newPassword }`. Every login of the user ends; they log in with the new password.
+
+- Links work once, verification links for 24 hours and reset links for 60 minutes. A new email makes the previous link of that kind stop working.
+- `forgot-password` and `resend-verification` give the same answer whether or not the account exists, and send the email in the background, so they don't reveal which addresses are registered.
+- Resetting the password also verifies the address (the user opened the email).
+- With `AUTH_REQUIRE_VERIFIED_EMAIL=true`, register doesn't log the user in, and login answers `403` with `"code": "EMAIL_NOT_VERIFIED"` until the address is verified (`POST /auth/resend-verification { email }` sends a new link).
+- Change the emails' wording in `src/modules/auth/auth.emails.js`.
+
+**Sending emails:** set `SMTP_HOST` (and `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`) in `.env` - any SMTP provider works (Gmail, SendGrid, Mailgun, Amazon SES, ...).
+Until then, development prints every email, link included, to the console. In production without `SMTP_HOST` the server only logs that the email was not sent.
+
+### Protecting modules and roles
+
+```bash
+express-mod-cli add orders total:number --auth         # router.use(requireAuth)
+express-mod-cli add reports title:string --role admin  # router.use(requireRole('admin'))
+```
+
+In your own routes, `req.user` is `{ id, role }`:
+
+```javascript
+const { requireAuth, requireRole } = require("../../middleware/auth");
+
+router.get("/mine", requireAuth, controller.listMine);        // any logged-in user
+router.delete("/:id", requireRole("admin"), controller.remove); // admins only
+```
+
+New accounts get the role `user`; clients can't choose it. Make the first admin with:
+
+```bash
+npm run auth:set-role -- you@example.com admin
+```
+
+### Settings (`.env`)
+
+| Variable                 | Default    | Meaning                                                              |
+| ------------------------ | ---------- | -------------------------------------------------------------------- |
+| `JWT_SECRET`             | (random)   | Signs access tokens; at least 32 characters. `add-auth` generates one |
+| `JWT_ACCESS_EXPIRES_IN`  | `15m`      | Access token lifetime                                                |
+| `REFRESH_TOKEN_DAYS`     | `30`       | How long a login lasts without activity                              |
+| `AUTH_REFRESH_IN_BODY`   | `false`    | Also return the refresh token in response bodies                     |
+| `AUTH_COOKIE_SAMESITE`   | `lax`      | `none` for a frontend on another site (needs HTTPS)                  |
+| `AUTH_RATE_LIMIT`        | `20`       | Login / register / password attempts per IP per 15 minutes, per route |
+| `APP_URL`                | `http://localhost:3000` | Frontend address used in email links                    |
+| `AUTH_REQUIRE_VERIFIED_EMAIL` | `false` | Refuse logins until the email address is verified                  |
+| `AUTH_EMAIL_RATE_LIMIT`  | `5`        | Emails one client can trigger per 15 minutes                         |
+| `MAIL_FROM`              | -          | Sender, e.g. `"My App <no-reply@myapp.com>"`                         |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | - | SMTP server; `SMTP_SECURE=true` for port 465 |
+
+**Frontend on another domain:** set `AUTH_COOKIE_SAMESITE=none`, serve over HTTPS, and allow credentials for that origin in `src/app`: `app.use(cors({ origin: "https://app.example.com", credentials: true }))`.
+**Behind a proxy** (Nginx, Heroku, ...): add `app.set("trust proxy", 1)` so rate limiting sees the client's IP.
+
+### Security details
+
+- Passwords are hashed with bcrypt (12 rounds); 8 characters minimum, 72 bytes maximum.
+- Refresh tokens and email tokens are random and stored only as SHA-256 hashes; MongoDB removes expired ones with a TTL index.
+- Login gives the same answer, in about the same time, for an unknown email and a wrong password.
+- Access tokens can't be revoked before they expire (that's what keeps them fast); keep `JWT_ACCESS_EXPIRES_IN` short.
+- Email tokens are bound to their purpose: a reset token can't verify an address and vice versa.
+
 ## 🟦 JavaScript and TypeScript
 
 |                 | JavaScript (default)   | TypeScript (`--ts`)                    |
@@ -301,10 +426,12 @@ my-project/
 │   │   ├── db.js                 # Connects / disconnects all of them
 │   │   └── mongodb.js / sql.js   # Connection helpers (one per kind of database in use)
 │   ├── middleware/
+│   │   ├── auth.js               # requireAuth / requireRole (add-auth)
 │   │   ├── errorHandler.js       # Global error handling
 │   │   └── validate.js           # Runs a module's Zod schema on the request body
 │   ├── migrations/<connection>/  # SQL migrations
 │   ├── modules/                  # Your business modules
+│   │   ├── auth/                 # Users, refresh tokens, /auth routes (add-auth)
 │   │   └── products/
 │   │       ├── products.model.js      # Schema & model
 │   │       ├── products.validation.js # Zod schemas for create / update
@@ -560,7 +687,16 @@ npm test   # generates projects in a temp directory and checks the output
 
 ## 📝 Changelog
 
-### v1.3.0 (Latest)
+### v1.4.0 (Latest)
+
+- 🔐 **Authentication** - new `add-auth` command: register, login, refresh token rotation with reuse detection, logout, logout from all devices, current user, change password
+- 📧 **Email verification and password reset** - one-time links by email (Nodemailer, any SMTP provider; printed to the console in development), optional `AUTH_REQUIRE_VERIFIED_EMAIL`
+- 🛡️ **Protected modules** - `add <module> --auth` and `--role <role>`; `requireAuth` / `requireRole` middleware for your own routes
+- 👑 `npm run auth:set-role` to make the first admin
+- Works with JavaScript and TypeScript, MongoDB, PostgreSQL and MySQL, and with users on any connection
+- 🧹 New projects no longer get a placeholder `JWT_SECRET` in `.env`; `add-auth` replaces the placeholder in older projects
+
+### v1.3.0
 
 - 🧩 **Custom fields** - `add <module> name:string price:number ...` with types, `optional`, `unique` and defaults
 - ✅ **Validation** - Zod schemas per module; unknown fields are dropped, errors list every invalid field
