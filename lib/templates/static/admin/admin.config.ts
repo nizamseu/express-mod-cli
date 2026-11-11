@@ -36,7 +36,7 @@ const config: AdminConfig = {
   // URL or path of a logo image; without one the title is shown
   logo: process.env.ADMIN_LOGO || false,
   favicon: process.env.ADMIN_FAVICON || undefined,
-  // The theme until a user picks one in the user menu (top bar): light, dark or noSidebar
+  // The theme until a user picks one in the user menu (top bar), see src/admin/themes
   theme: process.env.ADMIN_THEME || '__ADMIN_THEME__',
   // en or bn
   language: process.env.ADMIN_LANGUAGE || 'en',

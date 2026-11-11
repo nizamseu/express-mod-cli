@@ -15,7 +15,8 @@ import { getResources } from './resources';
 import { ensureDefaultAdmin } from './defaultAdmin';
 import { withPermissions } from './permissions';
 import { withAuditLog, adminLogResource, save, entryFor } from './auditLog';
-import { recentLogs } from './adminLog';
+import { recentLogs, activityByDay } from './adminLog';
+import { availableThemes as themeList } from './themes';
 import { createImportExport } from './importExport';
 import { createUploadFile } from './uploads';
 import passwordReset from './passwordReset';
@@ -272,7 +273,7 @@ function withDeleteChecks(resource: ResourceWithOptions, ValidationError: Valida
 export async function buildAdmin(sessionConfig: SessionOptions): Promise<{ admin: AdminJSClass; router: Router }> {
   const { default: AdminJS, ComponentLoader, Filter, ValidationError, flat } = await importPackage(() => import('adminjs'), 'adminjs');
   const { default: AdminJSExpress } = await importPackage(() => import('@adminjs/express'), '@adminjs/express');
-  const themes = await importPackage(() => import('@adminjs/themes'), '@adminjs/themes');
+  const themes = (await importPackage(() => import('@adminjs/themes'), '@adminjs/themes')) as unknown as Parameters<typeof themeList>[0];
 
   await registerAdapters(AdminJS);
 
@@ -287,6 +288,10 @@ export async function buildAdmin(sessionConfig: SessionOptions): Promise<{ admin
   componentLoader.override('Login', component('Login'));
   // The user menu has a theme switcher
   componentLoader.override('LoggedIn', component('LoggedIn'));
+  // The title or logo at the top of the sidebar (AdminJS's dark theme would show its own logo)
+  componentLoader.override('SidebarBranding', component('SidebarBranding'));
+  // In the Top Menu theme the sections are menus in the top bar
+  componentLoader.override('TopBar', component('TopBar'));
 
   const helpers: AdminHelpers = {
     zodHooks: createZodHooks(ValidationError),
@@ -316,12 +321,8 @@ export async function buildAdmin(sessionConfig: SessionOptions): Promise<{ admin
   (logs.options!.actions as Record<string, unknown>).import = { isAccessible: false, isVisible: false };
   resources.push(withPermissions(logs, { adminOnly: true }));
 
-  // Shown in the user menu of the top bar (see components/LoggedIn.jsx)
-  const availableThemes = [
-    { ...themes.light, name: 'Light' },
-    { ...themes.dark, name: 'Dark' },
-    { ...themes.noSidebar, name: 'Light, no sidebar' },
-  ];
+  // Shown in the user menu of the top bar (see components/LoggedIn.jsx and themes)
+  const availableThemes = themeList(themes);
 
   const admin: AdminJSClass = new AdminJS({
     rootPath: config.path,
@@ -336,20 +337,26 @@ export async function buildAdmin(sessionConfig: SessionOptions): Promise<{ admin
       withMadeWithLove: false,
     },
     version: { admin: false },
-    defaultTheme: availableThemes.some((theme) => theme.id === config.theme) ? config.theme : themes.light.id,
+    defaultTheme: availableThemes.some((theme) => theme.id === config.theme) ? config.theme : availableThemes[0].id,
     availableThemes,
     dashboard: {
       component: components.Dashboard,
       // Records per resource, and the logged-in user's latest actions ("My actions")
       handler: async (_request, _response, context) => {
         const counts: Record<string, number> = {};
+        // Only the pages this user may open (staff don't see Users and the admin log)
+        const visible = admin.resources.filter((resource) =>
+          resource.decorate().actions.list?.isAccessible(context.currentAdmin)
+        );
         await Promise.all(
-          admin.resources.map(async (resource) => {
+          visible.map(async (resource) => {
             counts[resource.id()] = await resource.count(new Filter({}, resource));
           })
         );
         const recent = context.currentAdmin ? await recentLogs({ userId: String(context.currentAdmin.id), limit: 10 }) : [];
-        return { title: config.title, counts, recent };
+        // Everyone's actions per day, for the chart of the Dashboard themes
+        const activity = await activityByDay(14);
+        return { title: config.title, counts, recent, activity };
       },
     },
     locale: {
