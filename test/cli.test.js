@@ -873,3 +873,268 @@ describe("protected modules", () => {
     assert.equal(cli(project, "add", "profiles").code, 0);
   });
 });
+
+describe("file, image and ref fields", () => {
+  test("ref fields point to an existing module on the same connection", () => {
+    const project = createProject("ref-fields-sql", "--ts", "--db", "postgres");
+    assert.match(cli(project, "add", "orders", "customer:ref:customers").err, /module "customers", which doesn't exist/);
+    assert.match(cli(project, "add", "orders", "customer:ref").err, /name the module it points to/);
+    assert.match(cli(project, "add", "orders", "photo:image:unique").err, /image fields cannot be unique/);
+
+    assert.equal(cli(project, "add", "customers", "name:string", "--skip-install").code, 0);
+    assert.equal(
+      cli(project, "add", "orders", "customer:ref:customers", "parent:ref:orders:optional", "--skip-install").code,
+      0
+    );
+
+    const model = read(project, "src", "modules", "orders", "orders.model.ts");
+    assert.match(model, /declare customer: number;/);
+    assert.match(model, /references: \{ model: 'customers', key: 'id' \}/);
+    assert.match(read(project, "src", "modules", "orders", "orders.validation.ts"), /customer: z\.number\(\)\.int\(\)\.positive\(\),/);
+
+    const migrations = path.join(project, "src", "migrations", "default");
+    const migration = read(migrations, fs.readdirSync(migrations).find((file) => file.endsWith("-create-orders.ts")));
+    assert.match(migration, /onDelete: 'RESTRICT'/);
+    assert.match(migration, /references: \{ model: 'orders', key: 'id' \},\n\s+onDelete: 'SET NULL'/);
+  });
+
+  test("records can't point to another database", () => {
+    const project = createProject("ref-fields-db");
+    cli(project, "add-db", "analytics", "--skip-install");
+    cli(project, "add", "customers", "name:string", "--skip-install");
+    const result = cli(project, "add", "visits", "customer:ref:customers", "--db", "analytics", "--skip-install");
+    assert.equal(result.code, 1);
+    assert.match(result.err, /same database/);
+  });
+});
+
+describe("add-admin", () => {
+  test("needs add-auth first", () => {
+    const project = createProject("admin-no-auth");
+    const result = cli(project, "add-admin");
+    assert.equal(result.code, 1);
+    assert.match(result.err, /Run "express-mod-cli add-auth" first/);
+    assert.equal(exists(project, "src", "admin"), false);
+  });
+
+  test("refuses extra arguments, bad options or running twice", () => {
+    const project = createProject("admin-twice");
+    cli(project, "add-auth", "--skip-install");
+    const appBefore = read(project, "src", "app.js");
+
+    assert.match(cli(project, "add-admin", "extra").err, /Unexpected argument: extra/);
+    assert.match(cli(project, "add-admin", "--path", "no-slash").err, /Invalid admin path/);
+    assert.match(cli(project, "add-admin", "--path", "/auth").err, /already used by a module/);
+    assert.match(cli(project, "add-admin", "--theme", "pink").err, /Unknown theme "pink"/);
+    assert.match(cli(project, "add-admin", "--role", "editor").err, /only allows the roles user, admin/);
+    assert.match(cli(project, "add-admin", "--role", "staff").err, /is for staff members/);
+    // Nothing was written by the failed attempts
+    assert.equal(exists(project, "src", "admin"), false);
+    assert.equal(read(project, "src", "app.js"), appBefore);
+
+    const first = cli(project, "add-admin", "--skip-install");
+    assert.equal(first.code, 0, first.err);
+
+    const second = cli(project, "add-admin", "--skip-install");
+    assert.equal(second.code, 1);
+    assert.match(second.err, /already set up/);
+  });
+
+  test("sets up the panel in a JavaScript + MongoDB project", () => {
+    const project = createProject("admin-mongo");
+    cli(project, "add-auth", "--skip-install");
+    const result = cli(project, "add-admin", "--skip-install");
+    assert.equal(result.code, 0, result.err);
+
+    for (const file of [
+      "admin.config.js", "router.js", "index.js", "resources.js", "authenticate.js", "session.js",
+      "zodHooks.js", "users.resource.js", "defaultAdmin.js", "translations.js",
+    ]) {
+      assert.ok(exists(project, "src", "admin", file), file);
+    }
+    for (const component of ["Dashboard", "Login", "LoggedIn", "Export", "Import"]) {
+      assert.ok(exists(project, "src", "admin", "components", `${component}.jsx`), component);
+    }
+    for (const file of ["permissions.js", "adminLog.js", "auditLog.js", "importExport.js", "uploads.js", "passwordReset.js", "theme.js"]) {
+      assert.ok(exists(project, "src", "admin", file), file);
+    }
+    assert.match(read(project, "src", "admin", "adminLog.js"), /mongoose\.Schema/);
+
+    // Staff members may view, add and edit
+    assert.match(read(project, "src", "modules", "auth", "user.model.js"), /enum: \['user', 'admin', 'staff'\]/);
+    assert.match(result.out, /"staff" role/);
+
+    // Uploaded files are served with their own security headers
+    const appFile = read(project, "src", "app.js");
+    assert.match(appFile, /const \{ serveUploads \} = require\('\.\/admin\/uploads'\);/);
+    assert.ok(appFile.indexOf("app.use('/uploads', serveUploads());") > appFile.indexOf("app.use(helmet());"));
+    assert.match(read(project, ".gitignore"), /^uploads\/$/m);
+    assert.ok(exists(project, "src", "scripts", "create-admin.js"));
+
+    // The router is mounted right after the app is created, before helmet and the body parsers
+    const app = read(project, "src", "app.js");
+    assert.match(app, /const adminRouter = require\('\.\/admin\/router'\);/);
+    assert.ok(app.indexOf("app.use('/admin', adminRouter);") < app.indexOf("app.use(helmet());"));
+    assert.ok(app.indexOf("app.use('/admin', adminRouter);") > app.indexOf("const app = express();"));
+
+    const index = read(project, "src", "index.js");
+    assert.match(index, /const \{ mountAdmin \} = require\('\.\/admin'\);/);
+    assert.match(index, /\n    await connectDB\(\);\n    await mountAdmin\(\);\n/);
+
+    const config = read(project, "src", "admin", "admin.config.js");
+    assert.match(config, /path: '\/admin'/);
+    assert.match(config, /role: 'admin'/);
+    assert.match(config, /connection: 'default'/);
+    assert.doesNotMatch(config, /__[A-Z_]+__/);
+
+    // A first admin user is created on startup from .env
+    const env = read(project, ".env");
+    assert.match(env, /ADMIN_COOKIE_SECRET=[\w-]{32,}/);
+    assert.match(env, /ADMIN_EMAIL=admin@example\.com/);
+    assert.match(env, /ADMIN_PASSWORD=[\w-]{16}/);
+    assert.match(result.out, /Email: +admin@example\.com/);
+    assert.match(read(project, ".env.example"), /ADMIN_PASSWORD=change-me/);
+
+    assert.deepEqual(JSON.parse(read(project, ".expressmodrc.json")).admin, { path: "/admin", role: "admin" });
+
+    const pkg = JSON.parse(read(project, "package.json"));
+    for (const dep of ["adminjs", "@adminjs/express", "@adminjs/themes", "@adminjs/mongoose", "connect-mongo", "express-session"]) {
+      assert.ok(pkg.dependencies[dep], dep);
+    }
+    assert.equal(pkg.dependencies["@adminjs/sequelize"], undefined);
+    assert.equal(pkg.scripts["admin:create"], "node src/scripts/create-admin.js");
+    assert.deepEqual(pkg.nodemonConfig.ignore, [".adminjs/*"]);
+
+    assert.ok(exists(project, "tests", "admin.test.js"));
+    assert.match(read(project, ".gitignore"), /\.adminjs\//);
+
+    assertValidJs(project);
+  });
+
+  test("TypeScript + PostgreSQL: custom path, sessions migration and adapters", () => {
+    const project = createProject("admin-sql-ts", "--ts", "--db", "postgres");
+    cli(project, "add-auth", "--skip-install");
+    const result = cli(project, "add-admin", "--skip-install", "--path", "/backoffice", "--theme", "dark");
+    assert.equal(result.code, 0, result.err);
+
+    const app = read(project, "src", "app.ts");
+    assert.match(app, /import adminRouter from '\.\/admin\/router';/);
+    assert.match(app, /app\.use\('\/backoffice', adminRouter\);/);
+    assert.match(read(project, "src", "index.ts"), /import \{ mountAdmin \} from '\.\/admin';/);
+
+    // The panel's own path, used for its links and login page
+    const config = read(project, "src", "admin", "admin.config.ts");
+    assert.match(config, /path: '\/backoffice'/);
+    assert.match(config, /process\.env\.ADMIN_THEME \|\| 'dark'/);
+
+    const migrations = fs.readdirSync(path.join(project, "src", "migrations", "default"));
+    const sessions = migrations.find((file) => file.endsWith("-create-admin-tables.ts"));
+    assert.ok(sessions);
+    const migration = read(project, "src", "migrations", "default", sessions);
+    assert.match(migration, /export async function up\(\{ context: queryInterface \}: MigrationParams\)/);
+    assert.match(migration, /createTable\('admin_sessions'/);
+    assert.match(migration, /createTable\('admin_logs'/);
+    assert.match(read(project, "src", "admin", "adminLog.ts"), /tableName: 'admin_logs'/);
+    assert.match(read(project, "src", "modules", "auth", "user.model.ts"), /isIn: \[\['user', 'admin', 'staff'\]\]/);
+
+    const pkg = JSON.parse(read(project, "package.json"));
+    assert.ok(pkg.dependencies["@adminjs/sequelize"]);
+    assert.ok(pkg.dependencies["connect-session-sequelize"]);
+    assert.equal(pkg.dependencies["@adminjs/mongoose"], undefined);
+    assert.ok(pkg.devDependencies["@types/express-session"]);
+    assert.equal(pkg.scripts["admin:create"], "tsx src/scripts/create-admin.ts");
+    assert.equal(pkg.nodemonConfig, undefined);
+
+    assert.deepEqual(JSON.parse(read(project, ".expressmodrc.json")).admin, { path: "/backoffice", role: "admin" });
+  });
+
+  test("existing modules read their fields from the model, new modules get them from the command", () => {
+    const project = createProject("admin-modules");
+    cli(project, "add-auth", "--skip-install");
+    cli(project, "add-db", "analytics", "--type", "postgres", "--skip-install");
+    cli(project, "add", "products", "name:string", "price:number", "--skip-install");
+    cli(project, "add", "visits", "page:string", "--db", "analytics", "--skip-install");
+
+    assert.equal(cli(project, "add-admin", "--skip-install").code, 0);
+
+    const products = read(project, "src", "modules", "products", "products.admin.js");
+    assert.match(products, /navigation: \{ name: 'Modules'/);
+    assert.match(products, /zodHooks\(createProductSchema\)/);
+    assert.doesNotMatch(products, /listProperties/);
+    assert.match(read(project, "src", "modules", "visits", "visits.admin.js"), /navigation: \{ name: 'Analytics'/);
+
+    const resources = read(project, "src", "admin", "resources.js");
+    assert.match(resources, /const productsAdmin = require\('\.\.\/modules\/products\/products\.admin'\);/);
+    assert.match(resources, /productsAdmin\(helpers\),/);
+    assert.ok(resources.indexOf("productsAdmin(helpers)") < resources.indexOf("visitsAdmin(helpers)"));
+
+    const pkg = JSON.parse(read(project, "package.json"));
+    assert.ok(pkg.dependencies["@adminjs/mongoose"]);
+    assert.ok(pkg.dependencies["@adminjs/sequelize"]);
+
+    // Added after the admin panel: the fields from the command line
+    assert.equal(
+      cli(project, "add", "orders", "total:integer", "note:text:optional", "shippedAt:date:optional", "--skip-install").code,
+      0
+    );
+    const orders = read(project, "src", "modules", "orders", "orders.admin.js");
+    assert.match(orders, /listProperties: \['total', 'note', 'shippedAt', 'createdAt'\]/);
+    assert.match(orders, /showProperties: \['_id', 'total'/);
+    assert.match(orders, /note: \{ type: 'textarea' \}/);
+    assert.match(orders, /shippedAt: \{ type: 'date' \}/);
+    assert.match(read(project, "src", "admin", "resources.js"), /ordersAdmin\(helpers\)/);
+
+    // --no-admin keeps a module out of the panel
+    assert.equal(cli(project, "add", "customers", "name:string", "--no-admin", "--skip-install").code, 0);
+    assert.equal(exists(project, "src", "modules", "customers", "customers.admin.js"), false);
+    assert.doesNotMatch(read(project, "src", "admin", "resources.js"), /customers/);
+
+    assertValidJs(project);
+  });
+
+  test("file, image and ref fields: upload boxes and links between modules", () => {
+    const project = createProject("admin-fields");
+    cli(project, "add-auth", "--skip-install");
+    cli(project, "add-admin", "--skip-install");
+    assert.equal(cli(project, "add", "customers", "name:string", "--skip-install").code, 0);
+    const result = cli(project, "add", "orders", "customer:ref:customers", "photo:image", "receipt:file", "--skip-install");
+    assert.equal(result.code, 0, result.err);
+
+    const admin = read(project, "src", "modules", "orders", "orders.admin.js");
+    assert.match(admin, /module\.exports = \(\{ zodHooks, uploadFile \}\)/);
+    assert.match(admin, /features: \[uploadFile\('photo', \{ images: true \}\), uploadFile\('receipt'\)\]/);
+    assert.match(admin, /editProperties: \['customer', 'photoFile', 'receiptFile'\]/);
+    assert.match(admin, /filterProperties: \['customer', 'createdAt'\]/);
+
+    const model = read(project, "src", "modules", "orders", "orders.model.js");
+    assert.match(model, /type: mongoose\.Schema\.Types\.ObjectId,\n\s+ref: 'Customer'/);
+    const validation = read(project, "src", "modules", "orders", "orders.validation.js");
+    assert.match(validation, /photo: z\.string\(\)\.trim\(\)\.min\(1\)\.nullish\(\)/);
+
+    assert.ok(JSON.parse(read(project, "package.json")).dependencies["@adminjs/upload"]);
+    assertValidJs(project);
+  });
+
+  test("a database added later gets its admin adapter", () => {
+    const project = createProject("admin-add-db");
+    cli(project, "add-auth", "--skip-install");
+    assert.equal(cli(project, "add-admin", "--skip-install").code, 0);
+    assert.equal(cli(project, "add-db", "reports", "--type", "mysql", "--skip-install").code, 0);
+
+    const pkg = JSON.parse(read(project, "package.json"));
+    assert.ok(pkg.dependencies["@adminjs/sequelize"]);
+  });
+
+  test("add stops before writing anything when the admin markers are gone", () => {
+    const project = createProject("admin-markers");
+    cli(project, "add-auth", "--skip-install");
+    cli(project, "add-admin", "--skip-install");
+    const resources = path.join(project, "src", "admin", "resources.js");
+    fs.writeFileSync(resources, read(resources).replace("// ADMIN_RESOURCES", ""));
+
+    const result = cli(project, "add", "products", "--skip-install");
+    assert.equal(result.code, 1);
+    assert.match(result.err, /ADMIN_RESOURCES/);
+    assert.equal(exists(project, "src", "modules", "products"), false);
+  });
+});
