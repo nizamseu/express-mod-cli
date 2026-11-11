@@ -44,10 +44,22 @@
     "jwt",
     "admin",
     "adminjs",
-    "dashboard"
+    "dashboard",
+    "django-admin",
+    "django-for-express",
+    "express-cli",
+    "express-generator",
+    "express-admin-panel",
+    "express-mvc",
+    "express-scaffold",
+    "rest-api-generator"
   ],
   "author": "Nizam Uddin",
   "license": "MIT",
+  "homepage": "https://github.com/nizamseu/express-mod-cli#readme",
+  "bugs": {
+    "url": "https://github.com/nizamseu/express-mod-cli/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nizamseu/express-mod-cli.git"

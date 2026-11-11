@@ -1,20 +1,41 @@
-# Express Modular Generator
+# express-mod-cli 🚀
 
-A modern command-line tool to generate Express.js applications with clean MVC architecture, in JavaScript or TypeScript, with one or many databases.
+> **Production-ready Express.js CLI generator with modular MVC architecture, built-in Django-style admin dashboard, Zod validation, JWT authentication, SQL migrations, and multi-database support (MongoDB, PostgreSQL, MySQL).**
+
+[![npm version](https://img.shields.io/npm/v/express-mod-cli.svg?style=flat-square)](https://www.npmjs.com/package/express-mod-cli)
+[![npm downloads](https://img.shields.io/npm/dm/express-mod-cli.svg?style=flat-square)](https://www.npmjs.com/package/express-mod-cli)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
+[![node version](https://img.shields.io/node/v/express-mod-cli.svg?style=flat-square)](https://nodejs.org)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/nizamseu/express-mod-cli/pulls)
+
+A modern, full-featured command-line tool to scaffold scalable Express.js applications in JavaScript or TypeScript with zero boilerplate fatigue.
 
 ## ✨ Features
 
-- 🏗️ **Modular MVC Architecture** - Clean separation of concerns
+- 🎛️ **Django-Style Admin Dashboard** - `add-admin` generates an instant admin panel with theme switcher (Classic, Modern, Top Menu), auto-model discovery, CRUD, search, filter, CSV/JSON import/export, and audit logs
+- 🏗️ **Modular MVC Architecture** - Clean separation of concerns with domain modules
 - 🟦 **JavaScript or TypeScript** - Pick the language when you create the project
 - 🗄️ **MongoDB, PostgreSQL, MySQL** - Mongoose for MongoDB, Sequelize for SQL
 - 🔀 **Multiple Databases** - Connect several databases in one project, even of different kinds
-- 🧩 **Your own fields** - `add products name:string price:number` generates the schema, validation and migration
-- ✅ **Request validation** - Zod schemas for every module; unknown fields never reach the database
-- 📄 **Pagination, sorting, search** - `?page=2&limit=20&sort=-price&search=phone` on every list endpoint
-- 🔁 **SQL migrations** - Tables are created and changed by migrations, not `sync()`
-- 🧪 **Test-ready** - `npm test` works from the first minute, no database needed
-- 🔐 **Authentication** - `add-auth` adds accounts, refresh tokens, roles, email verification and password reset; `add --auth` protects a module
-- 🔒 **Security Ready** - CORS, Helmet, and error handling built-in
+- 🧩 **Your Own Fields** - `add products name:string price:number` generates the schema, validation and migration
+- ✅ **Request Validation** - Automatic Zod schemas for every module; unknown fields never reach the database
+- 📄 **Pagination, Sorting, Search** - `?page=2&limit=20&sort=-price&search=keyword` on every list endpoint
+- 🔁 **SQL Migrations** - Tables are created and changed by migrations, not `sync()`
+- 🧪 **Test-Ready** - `npm test` works from the first minute, no database needed
+- 🔐 **Authentication** - `add-auth` adds accounts, refresh tokens, roles, email verification and password reset
+- 🔒 **Security-Ready** - CORS, Helmet, and centralized error handling built-in
+
+## 📊 Comparison: Why express-mod-cli?
+
+| Feature | `express-generator` | `NestJS CLI` | **`express-mod-cli`** |
+| :--- | :---: | :---: | :---: |
+| **Django-style Admin Panel** | ❌ No | ❌ No | ✅ **Built-in (`add-admin`)** |
+| **Instant CRUD & Validation** | ❌ Manual | ⚠️ Heavy decorators | ✅ **One command with Zod** |
+| **Multi-Database Support** | ❌ Manual | ⚠️ Complex config | ✅ **Zero-config (`add-db`)** |
+| **Architecture** | Flat / Legacy | Heavy OOP / DI | ✅ **Clean Modular MVC** |
+| **Authentication & Auth Roles** | ❌ No | ⚠️ Setup required | ✅ **Built-in (`add-auth`)** |
+| **CSV/JSON Import & Export** | ❌ No | ❌ No | ✅ **Built-in** |
+| **Learning Curve** | Low (Outdated) | High | ✅ **Minimal (Idiomatic Express)** |
 
 ## 📋 Installation
 
@@ -854,6 +875,35 @@ Their SQL tables are still created by `sync()`; migrations, `add-migration` and 
 - Basic project and module generation
 - Native MongoDB driver integration
 - Simple MVC structure
+
+## ❓ Frequently Asked Questions (FAQ)
+
+### How do I add an admin panel to Express.js like Django?
+With `express-mod-cli`, you can add a full Django-style administration dashboard in seconds:
+```bash
+express-mod-cli add-auth   # Sets up users, roles, and auth repository
+express-mod-cli add-admin  # Generates the admin dashboard at /admin
+```
+Every module created with `express-mod-cli add <name>` automatically registers in the admin sidebar with full CRUD, search, filter drawer, CSV/JSON export/import, and Zod validation.
+
+### How is express-mod-cli different from express-generator?
+The legacy `express-generator` package only scaffolds a minimal skeleton with view engines. In contrast, `express-mod-cli` generates:
+- Modern domain-driven modular MVC architecture
+- Modern JavaScript or TypeScript with Express 5
+- Automatic Zod schema request validation
+- Multi-database support in one project (MongoDB + PostgreSQL + MySQL)
+- Built-in JWT authentication with refresh token rotation
+- Built-in Django-style admin dashboard with custom themes
+
+### How do I connect multiple databases in one Express project?
+Run `express-mod-cli add-db <name> --type <mongodb|postgres|mysql>`. You can then bind any module to that connection with `express-mod-cli add <module> --db <name>`.
+
+### Does express-mod-cli support TypeScript?
+Yes! Pass the `--ts` flag when creating your project:
+```bash
+express-mod-cli create my-app --ts --db postgres
+```
+All models, controllers, routes, validations, migrations, and tests are generated as fully-typed TypeScript files.
 
 ## 📞 Support
 
