@@ -96,7 +96,7 @@ express-mod-cli add reports title:string --db analytics
 | `add-auth`      | `--skip-install`       | Don't run `npm install` for the new packages                               |
 | `add-admin`     | `--path <path>`        | Web path for the admin panel (default: `/admin`)                           |
 | `add-admin`     | `--role <role>`        | Role that may log in (default: `admin`, must be a role of the User model)  |
-| `add-admin`     | `--theme <theme>`      | Default theme: `light`, `dark`, `noSidebar` (default: `light`)             |
+| `add-admin`     | `--theme <theme>`      | Default theme, see [Themes](#themes) (default: `classic`)                  |
 | `add-admin`     | `--skip-install`       | Don't run `npm install` for the new packages                               |
 
 When `create` runs in a terminal, it asks for whatever was not given on the command line (Enter picks the default).
@@ -352,7 +352,7 @@ npm run dev                                     # open http://localhost:5000/adm
 - **Every module**: list, search, filter, sort, create, edit and delete records. Modules added later with `add` appear automatically (`--no-admin` keeps one out).
 - **Same rules as the API**: forms are checked with the module's Zod schemas, so the panel can't save what `POST /products` would reject.
 - **Users**: create users with a password, change roles, reset passwords (the user is logged out everywhere). Password hashes are never sent to the browser, and an admin can't remove their own admin role or delete their own account.
-- **Home page** with every module, its number of records and Add / Change links, and your recent actions; light, dark and no-sidebar themes (switch in the user menu, top right - remembered per browser); English and Bangla.
+- **Home page** with every module, its number of records and Add / Change links, and your recent actions; themes to switch in the user menu (top right, remembered per browser); English and Bangla.
 - **Admin log**: every add, change, delete and import - who, when, which record and which fields (never the values).
 - **Export / Import** on every page: CSV or JSON. Export follows the list's filters and leaves out hidden fields; every imported row is checked like the "Create new" form, failed rows are listed, and each imported record is in the admin log.
   A file or image column holds the path of a file already in `uploads/` (what Export writes) - a CSV can't carry the files themselves.
@@ -369,6 +369,21 @@ npm run dev                                     # open http://localhost:5000/adm
 | `staff` | view, add, edit and export module records - not delete, import, or open Users / Admin log |
 
 `add-admin` adds `staff` to the roles of the User model. Give a user a role on the Users page or with `npm run auth:set-role -- <email> staff`.
+
+### Themes
+
+Every user picks a theme in the user menu (top right); `ADMIN_THEME` is the one used until then (`add-admin --theme`).
+
+| Theme                          | Look                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------- |
+| `classic`, `classic-dark`      | Like Django's admin: blue band and yellow title, a table per section with Add / Change, recent actions (default) |
+| `modern`, `modern-dark`        | Number cards, an activity chart (last 14 days), records per module, rounded cards |
+| `light`, `dark`                | AdminJS's own look                                                         |
+| `top-menu`                     | No sidebar: the sections are menus in the top bar                          |
+
+A theme is its colours in `src/admin/themes` and a stylesheet in `src/admin/themes/<id>.css`.
+For your own theme, copy a stylesheet, add an entry to `src/admin/themes` and its id to `THEME_IDS`.
+The login and password reset pages are dark when a dark theme is chosen.
 
 ### The first admin
 
@@ -408,7 +423,7 @@ Modules created before `add-admin` get an admin file without a field list: the f
 | --------------------- | ------------------------------------------------------------------ |
 | `ADMIN_COOKIE_SECRET` | Signs the login cookie (random, at least 32 characters)            |
 | `ADMIN_TITLE`         | Name shown in the panel and on the login page                      |
-| `ADMIN_THEME`         | `light`, `dark` or `noSidebar`                                     |
+| `ADMIN_THEME`         | The theme until a user picks one, see [Themes](#themes)            |
 | `ADMIN_LANGUAGE`      | `en` or `bn`                                                       |
 | `ADMIN_SESSION_HOURS` | How long a login lasts (default 8)                                 |
 | `ADMIN_URL`           | This server's address, for password reset links (default `http://localhost:<PORT>`) |
