@@ -47,10 +47,11 @@ express-mod-cli add products name:string price:number stock:integer:default=0
 express-mod-cli add order-items quantity:integer status:enum:pending,shipped:default=pending
 ```
 
-### Add authentication
+### Add authentication and an admin panel
 
 ```bash
 express-mod-cli add-auth                               # /auth/register, /auth/login, ...
+express-mod-cli add-admin                              # Admin panel at /admin (needs add-auth)
 express-mod-cli add orders total:number --auth         # only for logged-in users
 express-mod-cli add reports title:string --role admin  # only for admins
 ```
@@ -71,6 +72,7 @@ express-mod-cli add reports title:string --db analytics
 | `add-db <name>`                 | Add a database connection to the project   | `express-mod-cli add-db analytics --type mysql` |
 | `add-migration <name>`          | Add an empty migration to a SQL connection | `express-mod-cli add-migration add-phone`       |
 | `add-auth`                      | Add authentication to the project          | `express-mod-cli add-auth`                      |
+| `add-admin`                     | Add an admin panel (needs `add-auth`)      | `express-mod-cli add-admin`                     |
 | `--help` or `-h`                | Show help information                      | `express-mod-cli --help`                        |
 | `--version` or `-v`             | Show version number                        | `express-mod-cli --version`                     |
 
@@ -92,6 +94,10 @@ express-mod-cli add reports title:string --db analytics
 | `add-migration` | `--db <connection>`    | The SQL connection the migration belongs to (default: `default`)           |
 | `add-auth`      | `--db <connection>`    | The connection that stores users (default: `default`)                      |
 | `add-auth`      | `--skip-install`       | Don't run `npm install` for the new packages                               |
+| `add-admin`     | `--path <path>`        | Web path for the admin panel (default: `/admin`)                           |
+| `add-admin`     | `--role <role>`        | Role that may log in (default: `admin`, must be a role of the User model)  |
+| `add-admin`     | `--theme <theme>`      | Default theme: `light`, `dark`, `noSidebar` (default: `light`)             |
+| `add-admin`     | `--skip-install`       | Don't run `npm install` for the new packages                               |
 
 When `create` runs in a terminal, it asks for whatever was not given on the command line (Enter picks the default).
 In scripts and CI it never asks: pass `--ts`/`--js` and `--db`, or `-y` for the defaults.
@@ -118,6 +124,14 @@ Format: `<name>:<type>[:optional][:unique][:default=<value>]`
 | `boolean`  | Boolean | `BOOLEAN`      | `true` / `false`               |
 | `date`     | Date    | `DATETIME`     | date string, e.g. `2026-01-31` |
 | `enum:a,b` | String  | `VARCHAR(255)` | one of the listed values       |
+| `file`     | String  | `VARCHAR(255)` | the path of an uploaded file (always optional) |
+| `image`    | String  | `VARCHAR(255)` | like `file`; the admin panel accepts images only |
+| `ref:<module>` | ObjectId (`ref`) | `INTEGER` + foreign key | the id of a record of that module |
+
+A `ref` field links two modules, e.g. `customer:ref:customers`; the other module must already exist on the same connection
+(or be the module itself, e.g. `parent:ref:categories:optional`). A record that a required link points to can't be deleted (the admin panel says which records to change first);
+an optional link to a deleted record is cleared.
+`file` and `image` fields get an upload box in the [admin panel](#%EF%B8%8F-admin-panel).
 
 | Option        | Meaning                                              |
 | ------------- | ---------------------------------------------------- |
@@ -324,6 +338,86 @@ npm run auth:set-role -- you@example.com admin
 - Login gives the same answer, in about the same time, for an unknown email and a wrong password.
 - Access tokens can't be revoked before they expire (that's what keeps them fast); keep `JWT_ACCESS_EXPIRES_IN` short.
 - Email tokens are bound to their purpose: a reset token can't verify an address and vice versa.
+
+## 🛡️ Admin Panel
+
+`express-mod-cli add-admin` adds a Django-style admin panel, built on [AdminJS](https://adminjs.co). Run `add-auth` first: the panel uses its users.
+
+```bash
+express-mod-cli add-auth
+express-mod-cli add-admin                       # or: --path /backoffice --theme dark
+npm run dev                                     # open http://localhost:5000/admin
+```
+
+- **Every module**: list, search, filter, sort, create, edit and delete records. Modules added later with `add` appear automatically (`--no-admin` keeps one out).
+- **Same rules as the API**: forms are checked with the module's Zod schemas, so the panel can't save what `POST /products` would reject.
+- **Users**: create users with a password, change roles, reset passwords (the user is logged out everywhere). Password hashes are never sent to the browser, and an admin can't remove their own admin role or delete their own account.
+- **Home page** with every module, its number of records and Add / Change links, and your recent actions; light, dark and no-sidebar themes (switch in the user menu, top right - remembered per browser); English and Bangla.
+- **Admin log**: every add, change, delete and import - who, when, which record and which fields (never the values).
+- **Export / Import** on every page: CSV or JSON. Export follows the list's filters and leaves out hidden fields; every imported row is checked like the "Create new" form, failed rows are listed, and each imported record is in the admin log.
+  A file or image column holds the path of a file already in `uploads/` (what Export writes) - a CSV can't carry the files themselves.
+- **Uploads**: `file` and `image` fields get an upload box. Files are kept in `uploads/` and served at `/uploads` (type and size are checked on the server; uploaded files can't run scripts).
+- **Links between modules**: `ref` fields become a searchable select, and the panel checks the record exists.
+- **Forgot your password?** on the login page: admins and staff get a reset link by email (uses the `add-auth` mail settings).
+- **Logins end** when the user is deleted, loses the role, or gets a new password (checked every 30 seconds).
+
+### Roles
+
+| Role    | Can                                                                                   |
+| ------- | ------------------------------------------------------------------------------------- |
+| `admin` | everything                                                                            |
+| `staff` | view, add, edit and export module records - not delete, import, or open Users / Admin log |
+
+`add-admin` adds `staff` to the roles of the User model. Give a user a role on the Users page or with `npm run auth:set-role -- <email> staff`.
+
+### The first admin
+
+`add-admin` writes a first admin to `.env` and prints it:
+
+```
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=<random>
+```
+
+That user is created on the first start, while the database has no admin yet. Log in and change the password (Users). More admins, or an existing user made an admin:
+
+```bash
+npm run admin:create -- jane@example.com                 # new user: prints a random password
+npm run admin:create -- jane@example.com 'Pass-word-1' 'Jane Doe'
+```
+
+### Files
+
+| File                                       | What it does                                                          |
+| ------------------------------------------ | --------------------------------------------------------------------- |
+| `src/admin/admin.config`                   | Path, role, title, theme, language, session length                   |
+| `src/admin/resources`                      | Everything in the sidebar; `add` registers modules here               |
+| `src/modules/<module>/<module>.admin`      | How a module looks: columns, filters, form fields, validation        |
+| `src/admin/users.resource`                 | The Users page                                                        |
+| `src/admin/translations`                   | Texts and labels (`en`, `bn`)                                         |
+| `src/admin/permissions`                    | What admin and staff may do                                           |
+| `src/admin/auditLog`, `src/admin/adminLog` | The admin log                                                         |
+| `src/admin/uploads`                        | Where uploaded files are kept and how they are served                 |
+| `src/admin/components/`                    | The home, login, export and import pages (React)                      |
+
+Modules created before `add-admin` get an admin file without a field list: the fields are read from the model.
+
+### Settings (`.env`)
+
+| Variable              | Meaning                                                            |
+| --------------------- | ------------------------------------------------------------------ |
+| `ADMIN_COOKIE_SECRET` | Signs the login cookie (random, at least 32 characters)            |
+| `ADMIN_TITLE`         | Name shown in the panel and on the login page                      |
+| `ADMIN_THEME`         | `light`, `dark` or `noSidebar`                                     |
+| `ADMIN_LANGUAGE`      | `en` or `bn`                                                       |
+| `ADMIN_SESSION_HOURS` | How long a login lasts (default 8)                                 |
+| `ADMIN_URL`           | This server's address, for password reset links (default `http://localhost:<PORT>`) |
+| `ADMIN_UPLOAD_MAX_MB` | Largest uploaded file (default 10)                                 |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | The first admin, created while there is none            |
+
+Logins are stored in the users' database (`admin_sessions`), and failed logins are limited per IP (`AUTH_RATE_LIMIT` per 15 minutes).
+The panel starts after the databases connect; if it can't start, the API keeps running and `/admin` answers `503`.
+In production set `NODE_ENV=production` (the panel's components are built once on startup) and, behind an HTTPS proxy, `app.set('trust proxy', 1)`.
 
 ## 🟦 JavaScript and TypeScript
 
@@ -687,7 +781,15 @@ npm test   # generates projects in a temp directory and checks the output
 
 ## 📝 Changelog
 
-### v1.4.0 (Latest)
+### v1.5.0 (Latest)
+
+- `add-admin`: admin panel for every module, with users and roles, a first admin user from `.env` and `npm run admin:create`
+- Admin forms use the modules' Zod schemas; password hashes are never sent to the browser
+- `add --no-admin`; `add` and `add-db` keep the panel's packages up to date
+- Admin log and recent actions, `staff` role, CSV/JSON export and import, file uploads, password reset from the login page
+- New field types: `file`, `image` and `ref:<module>` (links between modules, with foreign keys in SQL)
+
+### v1.4.0
 
 - 🔐 **Authentication** - new `add-auth` command: register, login, refresh token rotation with reuse detection, logout, logout from all devices, current user, change password
 - 📧 **Email verification and password reset** - one-time links by email (Nodemailer, any SMTP provider; printed to the console in development), optional `AUTH_REQUIRE_VERIFIED_EMAIL`
