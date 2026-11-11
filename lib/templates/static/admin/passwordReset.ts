@@ -8,6 +8,7 @@ import { hashPassword, generateToken, hashToken } from '../utils/security';
 import { RESET_PASSWORD_MINUTES } from '../config/auth';
 import config from './admin.config';
 import { panelRoles } from './authenticate';
+import { DARK_THEMES } from './themes';
 
 /**
  * "Forgot your password?" for the admin panel:
@@ -49,7 +50,7 @@ const page = (title: string, body: string, dark = false): string => `<!DOCTYPE h
 </html>`;
 
 /** The user picked the dark theme in the panel (see theme.ts) */
-const isDark = (req: express.Request): boolean => /(?:^|;\s*)admin_theme=dark(?:;|$)/.test(req.headers.cookie || '');
+const isDark = (req: express.Request): boolean => DARK_THEMES.includes((req.headers.cookie || '').match(/(?:^|;\s*)admin_theme=([^;]+)/)?.[1] || '');
 
 const backToLogin = `<p><a href="${config.path}/login">Back to the login page</a></p>`;
 
