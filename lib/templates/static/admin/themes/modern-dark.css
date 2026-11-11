@@ -1,0 +1,59 @@
+/* "Modern Dark": the modern look on AdminJS's dark base styles */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('../dark/style.css');
+
+body {
+  background: #0b0d14;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+[data-css='sidebar'] {
+  border-right: 0;
+  box-shadow: 1px 0 0 #1f2230;
+}
+
+[data-css='topbar'] {
+  border-bottom: 1px solid #1f2230;
+  box-shadow: none;
+}
+
+.adminjs_Button,
+.adminjs_Input,
+.adminjs_Select,
+.adminjs_TextArea,
+.adminjs_MessageBox {
+  border-radius: 8px !important;
+}
+
+.adminjs_Badge {
+  border-radius: 999px !important;
+}
+
+/* Tables sit in a rounded card. No overflow: hidden here - it would cut off
+   the row menus (the ⋮ button) that open inside the table. */
+[data-css='app-content'] .adminjs_Table {
+  background: #141724;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.adminjs_TableHead .adminjs_TableCell:first-child {
+  border-top-left-radius: 12px;
+}
+
+.adminjs_TableHead .adminjs_TableCell:last-child {
+  border-top-right-radius: 12px;
+}
+
+.adminjs_TableHead .adminjs_TableCell {
+  background: #181b2a;
+  font-weight: 600;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.adminjs_TableBody .adminjs_TableRow:hover {
+  background: #1b1f33;
+}

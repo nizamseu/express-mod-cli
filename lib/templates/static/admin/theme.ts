@@ -1,5 +1,6 @@
 import express, { type Request } from 'express';
 import config from './admin.config';
+import { THEME_IDS } from './themes';
 
 /**
  * The theme switcher in the user menu (top bar):
@@ -7,7 +8,7 @@ import config from './admin.config';
  * The choice is kept in the login session (AdminJS reads it from there) and in a
  * cookie, so it is still there after logging out and in again.
  */
-const THEMES = ['light', 'dark', 'noSidebar'];
+const THEMES = THEME_IDS;
 const THEME_COOKIE = 'admin_theme';
 const YEAR = 365 * 24 * 60 * 60 * 1000;
 
@@ -21,12 +22,18 @@ const savedTheme = (req: Request): string | undefined => {
 
 const router = express.Router();
 
-// A user who logs in gets the theme they chose before
-router.use((req, _res, next) => {
+// A user who logs in gets the theme they chose before. A theme that no longer exists
+// (renamed or removed) is dropped: AdminJS would otherwise show no theme menu at all.
+router.use((req, res, next) => {
   const adminUser = sessionOf(req)?.adminUser;
   const theme = savedTheme(req);
-  if (adminUser && theme && adminUser.theme !== theme) {
-    adminUser.theme = theme;
+
+  if (!theme && /(?:^|;\s*)admin_theme=/.test(req.headers.cookie || '')) {
+    res.clearCookie(THEME_COOKIE, { path: config.path });
+  }
+  if (adminUser && adminUser.theme !== theme && (theme || adminUser.theme)) {
+    if (theme) adminUser.theme = theme;
+    else if (!THEMES.includes(String(adminUser.theme))) delete adminUser.theme;
   }
   next();
 });

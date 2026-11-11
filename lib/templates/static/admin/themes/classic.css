@@ -1,0 +1,45 @@
+/*
+ * "Classic" theme: a classic admin site - a blue header, square
+ * corners, compact tables with small uppercase headings.
+ * Colours are set in src/admin/themes (overrides); this file styles the rest.
+ */
+body {
+  background: #f8f8f8;
+  font-family: -apple-system, 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* A blue strip above the top bar */
+[data-css='topbar'] {
+  border-top: 4px solid #417690;
+}
+
+[data-css='sidebar'] {
+  border-right: 1px solid #e8e8e8;
+}
+
+.adminjs_Button,
+.adminjs_Input,
+.adminjs_Select,
+.adminjs_TextArea,
+.adminjs_Badge,
+.adminjs_MessageBox {
+  border-radius: 4px !important;
+}
+
+/* Compact tables with small uppercase headings */
+.adminjs_TableHead .adminjs_TableCell {
+  background: #f8f8f8;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: #666;
+}
+
+.adminjs_TableBody .adminjs_TableCell {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.adminjs_TableBody .adminjs_TableRow:nth-child(even) {
+  background: #fbfbfb;
+}

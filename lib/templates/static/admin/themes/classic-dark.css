@@ -1,0 +1,41 @@
+/* "Classic Dark": the classic look on AdminJS's dark base styles */
+@import url('../dark/style.css');
+
+body {
+  background: #121212;
+  font-family: -apple-system, 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+[data-css='topbar'] {
+  border-top: 4px solid #264b5d;
+}
+
+[data-css='sidebar'] {
+  border-right: 1px solid #2c2c2c;
+}
+
+.adminjs_Button,
+.adminjs_Input,
+.adminjs_Select,
+.adminjs_TextArea,
+.adminjs_Badge,
+.adminjs_MessageBox {
+  border-radius: 4px !important;
+}
+
+.adminjs_TableHead .adminjs_TableCell {
+  background: #1e1e1e;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: #9e9e9e;
+}
+
+.adminjs_TableBody .adminjs_TableCell {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.adminjs_TableBody .adminjs_TableRow:nth-child(even) {
+  background: #1a1a1a;
+}

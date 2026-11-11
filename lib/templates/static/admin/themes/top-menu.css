@@ -1,0 +1,7 @@
+/*
+ * "Top Menu" theme: no sidebar - the sections are menus in the top bar
+ * (components/TopBar.jsx draws them).
+ */
+[data-css='sidebar'] {
+  display: none !important;
+}
