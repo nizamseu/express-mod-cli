@@ -15,7 +15,7 @@ const Login = () => {
   const forgotPath = String(action || '').replace(/\/login$/, '/forgot-password');
   const notice = new URLSearchParams(window.location.search).get('notice');
   // The login page doesn't get the user's theme from AdminJS; the theme switcher remembers it in a cookie
-  const dark = /(?:^|;\s*)admin_theme=dark(?:;|$)/.test(document.cookie);
+  const dark = /(?:^|;\s*)admin_theme=(?:dark|classic-dark|modern-dark)(?:;|$)/.test(document.cookie);
 
   return (
     <Box
