@@ -952,13 +952,17 @@ describe("add-admin", () => {
     ]) {
       assert.ok(exists(project, "src", "admin", file), file);
     }
-    for (const component of ["Dashboard", "Login", "LoggedIn", "Export", "Import"]) {
+    for (const component of ["Dashboard", "Login", "LoggedIn", "SidebarBranding", "TopBar", "Export", "Import"]) {
       assert.ok(exists(project, "src", "admin", "components", `${component}.jsx`), component);
     }
-    for (const file of ["permissions.js", "adminLog.js", "auditLog.js", "importExport.js", "uploads.js", "passwordReset.js", "theme.js"]) {
+    for (const file of ["permissions.js", "adminLog.js", "auditLog.js", "importExport.js", "uploads.js", "passwordReset.js", "theme.js", "themes.js"]) {
       assert.ok(exists(project, "src", "admin", file), file);
     }
     assert.match(read(project, "src", "admin", "adminLog.js"), /mongoose\.Schema/);
+    for (const theme of ["classic.css", "classic-dark.css", "modern.css", "modern-dark.css", "theme.bundle.js"]) {
+      assert.ok(exists(project, "src", "admin", "themes", theme), theme);
+    }
+    assert.match(read(project, ".env"), /ADMIN_THEME=classic$/m);
 
     // Staff members may view, add and edit
     assert.match(read(project, "src", "modules", "auth", "user.model.js"), /enum: \['user', 'admin', 'staff'\]/);
